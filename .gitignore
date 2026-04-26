@@ -42,5 +42,8 @@ Thumbs.db
 *.tmp
 *.temp
 
+# Local (non-versioned)
+.local/
+
 # Agent instruction file
 AGENTS.md
