@@ -6,3 +6,6 @@ scikit-learn
 tigramite
 lingam
 torch
+plotly
+ipywidgets
+nbformat

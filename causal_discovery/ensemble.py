@@ -54,6 +54,7 @@ def summarize_probabilistic_ensemble(
     prior_edge_probability: float = 0.1,
     posterior_weight: float = 0.7,
     confidence_level: float = 0.95,
+    method_weights: Mapping[str, float] | None = None,
 ) -> pd.DataFrame:
     non_empty = [result for result in results if result is not None and not result.empty]
     if not non_empty:
@@ -64,7 +65,9 @@ def summarize_probabilistic_ensemble(
                 "lag",
                 "method",
                 "votes",
+                "weighted_votes",
                 "support_ratio",
+                "weighted_support_ratio",
                 "support_ci_low",
                 "support_ci_high",
                 "mean_score",
@@ -78,11 +81,22 @@ def summarize_probabilistic_ensemble(
         )
 
     ensemble = pd.concat(non_empty, ignore_index=True)
+    method_weights = method_weights or {}
+
+    # Pesos iguais quando nenhum peso explicito for fornecido para o metodo.
+    method_weight_lookup = {
+        str(method): max(float(method_weights.get(str(method), 1.0)), 0.0)
+        for method in ensemble.get("method", pd.Series(dtype=object)).dropna().tolist()
+    }
+
     methods_available = {
         str(method)
         for method in ensemble.get("method", pd.Series(dtype=object)).dropna().tolist()
     }
     total_methods = max(len(methods_available), 1)
+    total_method_weight = sum(method_weight_lookup.get(name, 1.0) for name in methods_available)
+    if total_method_weight <= 0.0:
+        total_method_weight = float(total_methods)
 
     scores = pd.to_numeric(ensemble.get("score", pd.Series(dtype=float)), errors="coerce").abs()
     scale = float(scores.median()) if not scores.empty else 1.0
@@ -99,7 +113,9 @@ def summarize_probabilistic_ensemble(
         if votes < min_votes:
             continue
 
+        weighted_votes = sum(method_weight_lookup.get(name, 1.0) for name in methods)
         support_ratio = votes / total_methods
+        weighted_support_ratio = weighted_votes / total_method_weight
         support_ci_low, support_ci_high = wilson_support_interval(
             votes,
             total_methods,
@@ -122,7 +138,10 @@ def summarize_probabilistic_ensemble(
         else:
             posterior_probability = score_to_probability(mean_score, scale=scale)
 
-        edge_probability = posterior_weight * posterior_probability + (1.0 - posterior_weight) * support_ratio
+        edge_probability = (
+            posterior_weight * posterior_probability
+            + (1.0 - posterior_weight) * weighted_support_ratio
+        )
         edge_probability = min(max(float(edge_probability), 0.0), 1.0)
         uncertainty = 1.0 - edge_probability
         confidence = 1.0 - (support_ci_high - support_ci_low)
@@ -134,7 +153,9 @@ def summarize_probabilistic_ensemble(
                 "lag": lag,
                 "method": methods,
                 "votes": votes,
+                "weighted_votes": float(weighted_votes),
                 "support_ratio": float(support_ratio),
+                "weighted_support_ratio": float(weighted_support_ratio),
                 "support_ci_low": float(support_ci_low),
                 "support_ci_high": float(support_ci_high),
                 "mean_score": mean_score,
@@ -155,7 +176,9 @@ def summarize_probabilistic_ensemble(
                 "lag",
                 "method",
                 "votes",
+                "weighted_votes",
                 "support_ratio",
+                "weighted_support_ratio",
                 "support_ci_low",
                 "support_ci_high",
                 "mean_score",
