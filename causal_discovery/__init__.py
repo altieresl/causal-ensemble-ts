@@ -38,3 +38,6 @@ __all__ = [
     "summarize_ensemble",
     "summarize_probabilistic_ensemble",
 ]
+
+from .benchmark import generate_synthetic_timeseries, compute_structural_metrics, inject_noise_regime_change
+
