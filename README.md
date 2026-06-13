@@ -1,64 +1,115 @@
 # causal-ensemble-ts
 
-Ensemble Causal para Series Temporais
+Framework em Python para descoberta causal em series temporais usando ensemble de
+metodos, resumo probabilistico, conhecimento especialista e visualizacao interativa.
 
-## Resumo Causal Probabilistico
+## Visao geral
 
-O projeto agora inclui uma camada probabilistica para representar a incerteza na descoberta causal.
+O projeto combina resultados de diferentes algoritmos de descoberta causal em uma
+representacao comum de arestas temporais:
 
-Use summarize_probabilistic_ensemble para sair de uma visao binaria
-("a aresta existe" vs "a aresta nao existe") para probabilidades interpretaveis.
+```text
+source -> target em um lag especifico
+```
 
-### O que essa camada combina
+O objetivo e apoiar investigacao causal com mais robustez do que um metodo isolado,
+mantendo a incerteza visivel e permitindo que conhecimento de dominio seja aplicado de
+forma explicita.
 
-- Evidencia estatistica: p-values combinados com o metodo de Fisher.
-- Atualizacao bayesiana de evidencia: probabilidade a posteriori via aproximacao de Bayes Factor.
-- Confianca de concordancia: razao de votos e intervalo de confianca de Wilson entre metodos.
+## Fluxo principal
 
-### Uso basico
+1. Carregue os dados.
+2. Aplique `CausalPreprocessor` para preparar as series.
+3. Execute metodos candidatos, como PCMCI, LPCMCI, VARLiNGAM, DYNOTEARS ou score-based.
+4. Combine resultados com `summarize_probabilistic_ensemble` ou
+   `select_robust_ensemble_combination`.
+5. Aplique regras especialistas com `expert_knowledge`, quando necessario.
+6. Analise o grafo, a tabela de arestas e a consistencia entre metodos no dashboard.
+
+## Uso basico
 
 ```python
 from causal_discovery import summarize_probabilistic_ensemble
 
-summary = summarize_probabilistic_ensemble(all_results, min_votes=2)
-print(summary.head())
+summary = summarize_probabilistic_ensemble(
+    all_results,
+    min_votes=2,
+    method_weights=method_weights,
+)
+
+summary.head()
 ```
 
-### Principais colunas de saida
+## Dashboard interativo
 
-- edge_probability: estimativa final de probabilidade para source -> target em um lag.
-- posterior_probability: probabilidade bayesiana a partir da evidencia estatistica.
-- combined_p_value: p-value agregado quando disponivel.
-- support_ratio: fracao de metodos que apoiam a aresta.
-- support_ci_low / support_ci_high: intervalo de confianca para a razao de suporte.
-- uncertainty: 1 - edge_probability.
+```python
+from causal_discovery import create_advanced_expert_dashboard
 
-## Referencias Para Estudo
+dashboard = create_advanced_expert_dashboard(
+    processed_data=processed_data,
+    candidate_methods=candidate_methods,
+    candidate_method_kwargs=candidate_method_kwargs,
+    method_weights=method_weights,
+    all_nodes=list(processed_data.columns),
+    pipeline_callback=pipeline_runner,
+)
+```
 
-### Descoberta causal em series temporais
+O dashboard permite ajustar parametros, cadastrar regras especialistas, rodar o pipeline e
+visualizar resultados filtraveis.
 
-- Runge et al. (2019) - Detecting and quantifying causal associations in large nonlinear time series datasets.
-  Link: https://www.science.org/doi/10.1126/sciadv.aau4996
-- Runge (2018) - Causal network reconstruction from time series: From theoretical assumptions to practical estimation.
-  Link: https://doi.org/10.1063/1.5025050
+## Conhecimento especialista
 
-### Evidencia estatistica e combinacao de p-values
+```python
+expert_knowledge = [
+    {
+        "source": "meanpressure",
+        "target": "humidity",
+        "lag": 0,
+        "relation": "none",
+        "constraint": "hard",
+        "confidence": 0.95,
+        "prior_probability": 0.0,
+    },
+]
+```
 
-- Fisher (1932) - Statistical Methods for Research Workers (base do metodo de Fisher para combinacao de testes).
-  Link: https://archive.org/details/in.ernet.dli.2015.547535
-- Benjamini and Hochberg (1995) - Controlling the False Discovery Rate.
-  Link: https://doi.org/10.1111/j.2517-6161.1995.tb02031.x
+Relacoes aceitas:
 
-### Interpretacao bayesiana da evidencia
+- `strong`: reforca a existencia esperada da aresta.
+- `weak`: reduz a expectativa da aresta.
+- `inverse`: marca efeito esperado negativo.
+- `none`: reduz ou veta a aresta.
 
-- Kass and Raftery (1995) - Bayes Factors.
-  Link: https://doi.org/10.1080/01621459.1995.10476572
-- Sellke, Bayarri and Berger (2001) - Calibration of p Values for Testing Precise Null Hypotheses.
-  Link: https://doi.org/10.1080/01621459.2001.10475052
+Restricoes aceitas:
 
-### Fundamentos de causalidade
+- `soft`: mistura evidencia empirica e conhecimento especialista.
+- `hard`: aplica uma restricao forte; `none + hard` remove a aresta do resumo filtrado.
 
-- Pearl (2009) - Causality: Models, Reasoning, and Inference.
-  Link: https://www.cambridge.org/highereducation/books/causality/6F5E1A8E6E3D3A2D32D4D1DDAA6E5A9D
-- Spirtes, Glymour and Scheines (2000) - Causation, Prediction, and Search.
-  Link: https://mitpress.mit.edu/9780262693158/causation-prediction-and-search/
+## Principais colunas de saida
+
+- `edge_probability`: probabilidade estimada da aresta.
+- `posterior_probability`: probabilidade posterior aproximada.
+- `combined_p_value`: p-value agregado quando disponivel.
+- `support_ratio`: fracao de metodos que apoiam a aresta.
+- `support_ci_low` / `support_ci_high`: intervalo de Wilson para suporte.
+- `uncertainty`: `1 - edge_probability`.
+- `expert_adjustment`: regras especialistas aplicadas.
+- `expert_effect`: efeito esperado quando informado pelo especialista.
+
+## Documentacao local
+
+- `.local/DOCUMENTACAO_FRAMEWORK.md`: documentacao conceitual e operacional.
+- `.local/APRESENTACAO_FRAMEWORK.md`: roteiro de apresentacao conceitual.
+- `.local/APRESENTACAO_CODIGO.md`: roteiro tecnico com exemplos de codigo.
+
+## Referencias
+
+- Runge et al. (2019), *Detecting and quantifying causal associations in large nonlinear time series datasets*.
+- Runge (2018), *Causal network reconstruction from time series*.
+- Fisher (1932), *Statistical Methods for Research Workers*.
+- Benjamini and Hochberg (1995), *Controlling the False Discovery Rate*.
+- Kass and Raftery (1995), *Bayes Factors*.
+- Sellke, Bayarri and Berger (2001), *Calibration of p Values for Testing Precise Null Hypotheses*.
+- Pearl (2009), *Causality: Models, Reasoning, and Inference*.
+- Spirtes, Glymour and Scheines (2000), *Causation, Prediction, and Search*.

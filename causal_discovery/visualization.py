@@ -127,6 +127,22 @@ def plot_probabilistic_causal_graph(
                 showlegend=False,
             )
         )
+        fig.add_annotation(
+            x=x1,
+            y=y1,
+            ax=x0,
+            ay=y0,
+            xref="x",
+            yref="y",
+            axref="x",
+            ayref="y",
+            showarrow=True,
+            arrowhead=3,
+            arrowsize=1.2,
+            arrowwidth=max(1.0, width * 0.45),
+            arrowcolor=color,
+            opacity=0.85,
+        )
 
     node_x = [positions[node][0] for node in nodes]
     node_y = [positions[node][1] for node in nodes]
@@ -272,12 +288,17 @@ def create_advanced_expert_dashboard(
     ajuste de parâmetros e permite rodar/re-rodar o pipeline visualizando os resultados interativamente.
     """
     widgets = _require_widgets()
-    from IPython.display import display, clear_output
+    from IPython.display import display
     import json
 
+    if not all_nodes:
+        all_nodes = list(processed_data.columns)
+    if not all_nodes:
+        raise ValueError("all_nodes nao pode ser vazio quando processed_data nao tem colunas.")
+
     # 1. Configurações e Parâmetros
-    html_title_params = widgets.HTML("<h3>⚙️ Parâmetros do Modelo</h3>")
-    quick_mode_cb = widgets.Checkbox(value=True, description="Quick Mode (menos boots)", indent=False)
+    html_title_params = widgets.HTML("<h3>Parametros do modelo</h3>")
+    quick_mode_cb = widgets.Checkbox(value=True, description="Quick mode", indent=False)
     parallel_jobs_ui = widgets.IntSlider(value=2, min=1, max=8, description="Jobs (Threads):", style={'description_width': 'initial'})
     n_bootstrap_ui = widgets.IntSlider(value=4, min=1, max=50, description="Bootstraps:", style={'description_width': 'initial'})
     
@@ -295,58 +316,68 @@ def create_advanced_expert_dashboard(
     ])
 
     # 2. Conhecimento Especialista
-    html_title_expert = widgets.HTML("<h3>🧠 Conhecimento Especialista</h3><p>Adicione as regras preenchendo os campos abaixo (um por linha):</p>")
+    html_title_expert = widgets.HTML("<h3>Conhecimento especialista</h3><p>Adicione regras causais para orientar ou vetar arestas.</p>")
     
     # Layout para que os títulos (description) caibam sem serem cortados
     style = {'description_width': '200px'}
     layout = widgets.Layout(width='500px')
     
-    source_dd = widgets.Dropdown(options=all_nodes, description="1. Nó Origem (Causa):", style=style, layout=layout)
-    target_dd = widgets.Dropdown(options=all_nodes, description="2. Nó Destino (Efeito):", style=style, layout=layout)
+    source_dd = widgets.Dropdown(options=all_nodes, description="1. No origem (causa):", style=style, layout=layout)
+    target_default = all_nodes[1] if len(all_nodes) > 1 else all_nodes[0]
+    target_dd = widgets.Dropdown(options=all_nodes, value=target_default, description="2. No destino (efeito):", style=style, layout=layout)
     lag_input = widgets.IntText(value=0, description="3. Defasagem temporal (Lag):", style=style, layout=layout)
     
     relation_dd = widgets.Dropdown(
         options=[
-            ("Forte (Garante alta prob.)", "strong"), 
-            ("Fraca (Diminui a prob.)", "weak"), 
+            ("Forte (aumenta prob.)", "strong"), 
+            ("Fraca (reduz prob.)", "weak"), 
             ("Inversa (Sinal negativo)", "inverse"), 
             ("Nenhuma (Proibida)", "none")
         ], 
-        description="4. Força da Relação:", style=style, layout=layout
+        description="4. Forca da relacao:", style=style, layout=layout
     )
     
     constraint_dd = widgets.Dropdown(
-        options=[("Flexível (Soft - Bayesiano)", "soft"), ("Absoluta (Hard - Forçada)", "hard")], 
-        description="5. Tipo de Restrição:", style=style, layout=layout
+        options=[("Flexivel (soft)", "soft"), ("Absoluta (hard)", "hard")], 
+        description="5. Tipo de restricao:", style=style, layout=layout
     )
     
-    conf_input = widgets.FloatText(value=0.9, step=0.05, description="6. Confiança na regra (0 a 1):", style=style, layout=layout)
-    prior_input = widgets.FloatText(value=0.9, step=0.05, description="7. Probabilidade Prévia (0 a 1):", style=style, layout=layout)
+    conf_input = widgets.BoundedFloatText(value=0.9, min=0.0, max=1.0, step=0.05, description="6. Confianca (0 a 1):", style=style, layout=layout)
+    prior_input = widgets.BoundedFloatText(value=0.9, min=0.0, max=1.0, step=0.05, description="7. Prob. previa (0 a 1):", style=style, layout=layout)
     
-    add_rule_btn = widgets.Button(description="➕ Adicionar Regra à Lista", button_style="info", layout=widgets.Layout(width='500px'))
-    clear_rules_btn = widgets.Button(description="🗑️ Limpar Todas as Regras", button_style="danger", layout=widgets.Layout(width='500px'))
+    add_rule_btn = widgets.Button(description="Adicionar regra", button_style="info", layout=widgets.Layout(width='500px'))
+    clear_rules_btn = widgets.Button(description="Limpar regras", button_style="danger", layout=widgets.Layout(width='500px'))
     
     rules_text = widgets.Textarea(
         value="[]",
         placeholder="Nenhuma regra adicionada...",
         description="Regras atuais:",
-        layout=widgets.Layout(width="100%", height="150px")
+        disabled=True,
+        layout=widgets.Layout(width="100%", height="170px")
     )
+    rule_status = widgets.HTML("")
     
     current_rules = []
 
     def update_rules_ui():
         rules_text.value = json.dumps(current_rules, indent=2)
+        rule_status.value = f"<b>{len(current_rules)}</b> regra(s) na lista."
 
     def on_add_rule(_):
+        if source_dd.value == target_dd.value:
+            rule_status.value = "<span style='color:#b00020'>Origem e destino devem ser diferentes.</span>"
+            return
+        if lag_input.value < 0:
+            rule_status.value = "<span style='color:#b00020'>Lag nao pode ser negativo.</span>"
+            return
         rule = {
             "source": source_dd.value,
             "target": target_dd.value,
-            "lag": lag_input.value,
+            "lag": int(lag_input.value),
             "relation": relation_dd.value,
-            "confidence": conf_input.value,
+            "confidence": float(conf_input.value),
             "constraint": constraint_dd.value,
-            "prior_probability": prior_input.value,
+            "prior_probability": float(prior_input.value),
         }
         current_rules.append(rule)
         update_rules_ui()
@@ -369,28 +400,31 @@ def create_advanced_expert_dashboard(
         widgets.HTML("<hr>"),
         add_rule_btn,
         clear_rules_btn,
+        rule_status,
         widgets.HTML("<br>"),
         rules_text
     ])
+    update_rules_ui()
 
     # 3. Execução e Output
-    html_title_run = widgets.HTML("<h3>🚀 Execução do Ensemble</h3>")
-    run_btn = widgets.Button(description="▶️ Rodar Pipeline com estas Regras", button_style="success", layout=widgets.Layout(width="500px", height="50px"))
+    html_title_run = widgets.HTML("<h3>Execucao do ensemble</h3>")
+    run_btn = widgets.Button(description="Rodar pipeline com estas regras", button_style="success", layout=widgets.Layout(width="500px", height="50px"))
 
     log_output = widgets.Output() # Para os prints
     dash_output = widgets.Output() # Para o dashboard filtrado
 
     def on_run_pipeline(_):
+        run_btn.disabled = True
         with log_output:
-            clear_output(wait=True)
-            print("⏳ Inicializando descoberta causal... Isso pode demorar.")
+            log_output.clear_output(wait=True)
+            print("Inicializando descoberta causal... Isso pode demorar.")
             
         with dash_output:
-            clear_output(wait=True)
+            dash_output.clear_output(wait=True)
             
         try:
             # Chama o wrapper do pipeline
-            result_summary, consistency = pipeline_callback(
+            callback_result = pipeline_callback(
                 quick_mode=quick_mode_cb.value,
                 n_bootstrap=n_bootstrap_ui.value,
                 parallel_jobs=parallel_jobs_ui.value,
@@ -400,36 +434,36 @@ def create_advanced_expert_dashboard(
                 candidate_method_kwargs=candidate_method_kwargs,
                 method_weights=method_weights
             )
+            if isinstance(callback_result, Mapping):
+                result_summary = callback_result.get("probabilistic_summary", pd.DataFrame())
+                consistency = callback_result.get("consistency", pd.DataFrame())
+            else:
+                result_summary, consistency = callback_result
             
             with log_output:
-                print("✅ Finalizado com Sucesso! Veja o Dashboard interativo abaixo.")
+                print("Finalizado com sucesso. Veja o dashboard interativo abaixo.")
                 
             with dash_output:
-                clear_output(wait=True)
+                dash_output.clear_output(wait=True)
                 create_interactive_ensemble_dashboard(
                     result_summary,
                     consistency_matrix=consistency
                 )
         except Exception as e:
             with log_output:
-                print(f"❌ Erro durante a execução: {e}")
+                print(f"Erro durante a execucao: {e}")
+        finally:
+            run_btn.disabled = False
 
     run_btn.on_click(on_run_pipeline)
 
-    ui = widgets.VBox([
-        html_title_params,
-        params_controls,
-        widgets.HTML("<hr>"),
-        html_title_expert,
-        rule_controls,
-        widgets.HTML("<hr>"),
-        html_title_run,
-        run_btn,
-        widgets.HTML("<br>"),
-        log_output,
-        dash_output
-    ])
+    params_tab = widgets.VBox([html_title_params, params_controls])
+    expert_tab = widgets.VBox([html_title_expert, rule_controls])
+    run_tab = widgets.VBox([html_title_run, run_btn, widgets.HTML("<br>"), log_output])
+    results_tab = widgets.VBox([dash_output])
+    ui = widgets.Tab(children=[params_tab, expert_tab, run_tab, results_tab])
+    for index, title in enumerate(["Parametros", "Especialista", "Execucao", "Resultados"]):
+        ui.set_title(index, title)
 
     display(ui)
     return ui
-

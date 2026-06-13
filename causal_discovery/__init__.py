@@ -13,6 +13,7 @@ from .expert_knowledge import (
 )
 from .preprocessing import CausalPreprocessor
 from .visualization import (
+    create_advanced_expert_dashboard,
     create_interactive_ensemble_dashboard,
     filter_probabilistic_edges,
     plot_method_consistency_heatmap,
@@ -25,6 +26,7 @@ __all__ = [
     "create_interactive_ensemble_dashboard",
     "create_synthetic_dataset",
     "compute_method_consistency",
+    "create_advanced_expert_dashboard",
     "evaluate_method_combination",
     "extract_method_weights",
     "filter_probabilistic_edges",

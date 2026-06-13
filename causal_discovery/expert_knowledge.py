@@ -41,7 +41,7 @@ def normalize_expert_knowledge(knowledge: pd.DataFrame | list[dict] | None) -> p
     frame["confidence"] = pd.to_numeric(frame["confidence"], errors="coerce").fillna(0.5).clip(0.0, 1.0)
     frame["prior_probability"] = pd.to_numeric(frame["prior_probability"], errors="coerce")
 
-    valid_relation = frame["relation"].isin({"strong", "weak", "none"})
+    valid_relation = frame["relation"].isin({"strong", "weak", "inverse", "none"})
     valid_constraint = frame["constraint"].isin({"soft", "hard"})
     frame = frame[valid_relation & valid_constraint].copy()
 
@@ -85,6 +85,8 @@ def _apply_single_rule(edge_probability: float, rule_row: pd.Series) -> tuple[fl
 
     if relation == "strong":
         target_prior = float(prior_probability) if pd.notna(prior_probability) else 0.9
+    elif relation == "inverse":
+        target_prior = float(prior_probability) if pd.notna(prior_probability) else 0.75
     else:
         target_prior = float(prior_probability) if pd.notna(prior_probability) else 0.35
 
@@ -117,6 +119,8 @@ def apply_expert_knowledge_to_summary(
         output["expert_adjustment"] = "none"
     if "expert_confidence" not in output.columns:
         output["expert_confidence"] = 0.0
+    if "expert_effect" not in output.columns:
+        output["expert_effect"] = "unknown"
 
     for idx, edge_row in output.iterrows():
         matched_rules = expert[expert.apply(lambda rule: _matches_rule(edge_row, rule), axis=1)]
@@ -125,16 +129,24 @@ def apply_expert_knowledge_to_summary(
 
         current_probability = float(np.clip(edge_row.get("edge_probability", 0.0), 0.0, 1.0))
         applied_labels: list[str] = []
+        applied_effects: list[str] = []
         max_confidence = float(edge_row.get("expert_confidence", 0.0))
 
         for _, rule in matched_rules.iterrows():
             current_probability, label = _apply_single_rule(current_probability, rule)
             applied_labels.append(label)
+            if str(rule["relation"]) == "inverse":
+                applied_effects.append("negative")
+            elif str(rule["relation"]) in {"strong", "weak"}:
+                applied_effects.append("positive")
+            elif str(rule["relation"]) == "none":
+                applied_effects.append("forbidden")
             max_confidence = max(max_confidence, float(rule["confidence"]))
 
         output.at[idx, "edge_probability"] = current_probability
         output.at[idx, "uncertainty"] = 1.0 - current_probability
         output.at[idx, "expert_adjustment"] = "|".join(applied_labels)
+        output.at[idx, "expert_effect"] = "|".join(applied_effects) if applied_effects else "unknown"
         output.at[idx, "expert_confidence"] = float(max_confidence)
 
         if "posterior_probability" in output.columns:
