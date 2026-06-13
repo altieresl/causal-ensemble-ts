@@ -208,6 +208,7 @@ def run_bootstrap_stability_selection(
                 posterior_weight=posterior_weight,
                 confidence_level=confidence_level,
                 method_weights=weight_map,
+                method_names=list(outputs.keys()),
             )
             summary = apply_expert_knowledge_to_summary(summary, expert_knowledge, hard_filter=True)
             selected = summary[summary["edge_probability"] >= selection_probability_threshold]
@@ -294,7 +295,10 @@ def _mean_upper_triangle(matrix: pd.DataFrame) -> float:
     upper = values[np.triu_indices_from(values, k=1)]
     if upper.size == 0:
         return 1.0
-    return float(np.nanmean(upper))
+    finite = upper[np.isfinite(upper)]
+    if finite.size == 0:
+        return 0.0
+    return float(finite.mean())
 
 
 def _default_performance_score(metrics: dict[str, float]) -> float:
@@ -349,6 +353,7 @@ def evaluate_method_combination(
         posterior_weight=posterior_weight,
         confidence_level=confidence_level,
         method_weights=weight_map,
+        method_names=list(outputs.keys()),
     )
     probabilistic_summary = apply_expert_knowledge_to_summary(
         probabilistic_summary,

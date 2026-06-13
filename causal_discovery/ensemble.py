@@ -14,6 +14,29 @@ from .probabilistic import (
 )
 
 
+ENSEMBLE_COLUMNS = ["source", "target", "lag", "method", "votes", "mean_score"]
+
+PROBABILISTIC_COLUMNS = [
+    "source",
+    "target",
+    "lag",
+    "method",
+    "votes",
+    "weighted_votes",
+    "support_ratio",
+    "weighted_support_ratio",
+    "support_ci_low",
+    "support_ci_high",
+    "mean_score",
+    "combined_p_value",
+    "bayes_factor_10",
+    "posterior_probability",
+    "edge_probability",
+    "uncertainty",
+    "confidence",
+]
+
+
 def run_method_suite(
     data: pd.DataFrame,
     methods: Mapping[str, Callable[..., pd.DataFrame]],
@@ -29,17 +52,79 @@ def run_method_suite(
     return outputs
 
 
-def summarize_ensemble(results: list[pd.DataFrame], min_votes: int = 2) -> pd.DataFrame:
+def _empty_ensemble_frame() -> pd.DataFrame:
+    return pd.DataFrame(columns=ENSEMBLE_COLUMNS)
+
+
+def _empty_probabilistic_frame() -> pd.DataFrame:
+    return pd.DataFrame(columns=PROBABILISTIC_COLUMNS)
+
+
+def _normalize_method_names(
+    ensemble: pd.DataFrame,
+    *,
+    method_names: list[str] | None = None,
+    method_weights: Mapping[str, float] | None = None,
+) -> list[str]:
+    names: list[str] = []
+    if method_names is not None:
+        names.extend(str(name) for name in method_names)
+    else:
+        names.extend(
+            str(method)
+            for method in ensemble.get("method", pd.Series(dtype=object)).dropna().tolist()
+        )
+
+    if method_weights:
+        names.extend(str(name) for name in method_weights.keys())
+
+    seen: set[str] = set()
+    unique_names: list[str] = []
+    for name in names:
+        if name not in seen:
+            unique_names.append(name)
+            seen.add(name)
+    return unique_names
+
+
+def _deduplicate_method_edges(ensemble: pd.DataFrame) -> pd.DataFrame:
+    if ensemble.empty:
+        return ensemble
+
+    frame = ensemble.copy()
+    if "method" not in frame.columns:
+        frame["method"] = "unknown"
+    if "score" not in frame.columns:
+        frame["score"] = np.nan
+    if "p_value" not in frame.columns:
+        frame["p_value"] = np.nan
+
+    frame["method"] = frame["method"].astype(str)
+    frame["score"] = pd.to_numeric(frame["score"], errors="coerce")
+    frame["p_value"] = pd.to_numeric(frame["p_value"], errors="coerce")
+    return (
+        frame.groupby(["source", "target", "lag", "method"], as_index=False, dropna=False)
+        .agg(
+            score=("score", "mean"),
+            p_value=("p_value", "min"),
+        )
+    )
+
+
+def summarize_ensemble(
+    results: list[pd.DataFrame],
+    min_votes: int = 2,
+) -> pd.DataFrame:
     non_empty = [result for result in results if result is not None and not result.empty]
     if not non_empty:
-        return pd.DataFrame(columns=["source", "target", "lag", "method", "votes", "mean_score"])
+        return _empty_ensemble_frame()
 
-    ensemble = pd.concat(non_empty, ignore_index=True)
+    ensemble = _deduplicate_method_edges(pd.concat(non_empty, ignore_index=True))
     summary = (
         ensemble.groupby(["source", "target", "lag"], as_index=False)
         .agg(
-            method=("method", list),
-            votes=("method", "count"),
+            method=("method", lambda values: sorted(set(values.astype(str)))),
+            votes=("method", "nunique"),
             mean_score=("score", "mean"),
         )
         .sort_values(["votes", "mean_score"], ascending=[False, False])
@@ -55,46 +140,30 @@ def summarize_probabilistic_ensemble(
     posterior_weight: float = 0.7,
     confidence_level: float = 0.95,
     method_weights: Mapping[str, float] | None = None,
+    method_names: list[str] | None = None,
 ) -> pd.DataFrame:
     non_empty = [result for result in results if result is not None and not result.empty]
     if not non_empty:
-        return pd.DataFrame(
-            columns=[
-                "source",
-                "target",
-                "lag",
-                "method",
-                "votes",
-                "weighted_votes",
-                "support_ratio",
-                "weighted_support_ratio",
-                "support_ci_low",
-                "support_ci_high",
-                "mean_score",
-                "combined_p_value",
-                "bayes_factor_10",
-                "posterior_probability",
-                "edge_probability",
-                "uncertainty",
-                "confidence",
-            ]
-        )
+        return _empty_probabilistic_frame()
 
-    ensemble = pd.concat(non_empty, ignore_index=True)
+    ensemble = _deduplicate_method_edges(pd.concat(non_empty, ignore_index=True))
     method_weights = method_weights or {}
+    all_method_names = _normalize_method_names(
+        ensemble,
+        method_names=method_names,
+        method_weights=method_weights,
+    )
+    if not all_method_names:
+        all_method_names = _normalize_method_names(ensemble)
 
     # Pesos iguais quando nenhum peso explicito for fornecido para o metodo.
     method_weight_lookup = {
-        str(method): max(float(method_weights.get(str(method), 1.0)), 0.0)
-        for method in ensemble.get("method", pd.Series(dtype=object)).dropna().tolist()
+        name: max(float(method_weights.get(name, 1.0)), 0.0)
+        for name in all_method_names
     }
 
-    methods_available = {
-        str(method)
-        for method in ensemble.get("method", pd.Series(dtype=object)).dropna().tolist()
-    }
-    total_methods = max(len(methods_available), 1)
-    total_method_weight = sum(method_weight_lookup.get(name, 1.0) for name in methods_available)
+    total_methods = max(len(all_method_names), 1)
+    total_method_weight = sum(method_weight_lookup.get(name, 1.0) for name in all_method_names)
     if total_method_weight <= 0.0:
         total_method_weight = float(total_methods)
 
@@ -169,27 +238,7 @@ def summarize_probabilistic_ensemble(
         )
 
     if not rows:
-        return pd.DataFrame(
-            columns=[
-                "source",
-                "target",
-                "lag",
-                "method",
-                "votes",
-                "weighted_votes",
-                "support_ratio",
-                "weighted_support_ratio",
-                "support_ci_low",
-                "support_ci_high",
-                "mean_score",
-                "combined_p_value",
-                "bayes_factor_10",
-                "posterior_probability",
-                "edge_probability",
-                "uncertainty",
-                "confidence",
-            ]
-        )
+        return _empty_probabilistic_frame()
 
     return (
         pd.DataFrame(rows)

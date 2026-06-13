@@ -71,6 +71,8 @@ def wilson_support_interval(
     if total_methods <= 0:
         return 0.0, 0.0
 
+    confidence_level = float(np.clip(confidence_level, 1e-6, 1.0 - 1e-6))
+    votes = max(0, min(int(votes), int(total_methods)))
     p_hat = votes / total_methods
     z = float(norm.ppf(0.5 + confidence_level / 2.0))
     denominator = 1.0 + (z**2 / total_methods)
