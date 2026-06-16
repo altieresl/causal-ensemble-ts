@@ -282,6 +282,7 @@ def create_advanced_expert_dashboard(
     method_weights: dict,
     all_nodes: list[str],
     pipeline_callback, # Function to run the selection pipeline
+    initial_expert_knowledge: pd.DataFrame | list[dict] | None = None,
 ):
     """
     Cria um dashboard avançado que integra a inserção de conhecimento especialista,
@@ -357,7 +358,10 @@ def create_advanced_expert_dashboard(
     )
     rule_status = widgets.HTML("")
     
-    current_rules = []
+    if initial_expert_knowledge is None:
+        current_rules = []
+    else:
+        current_rules = pd.DataFrame(initial_expert_knowledge).to_dict("records")
 
     def update_rules_ui():
         rules_text.value = json.dumps(current_rules, indent=2)
@@ -439,6 +443,10 @@ def create_advanced_expert_dashboard(
                 consistency = callback_result.get("consistency", pd.DataFrame())
             else:
                 result_summary, consistency = callback_result
+            ui.pipeline_result = callback_result
+            ui.result_summary = result_summary
+            ui.consistency_matrix = consistency
+            ui.current_rules = current_rules
             
             with log_output:
                 print("Finalizado com sucesso. Veja o dashboard interativo abaixo.")
@@ -464,6 +472,10 @@ def create_advanced_expert_dashboard(
     ui = widgets.Tab(children=[params_tab, expert_tab, run_tab, results_tab])
     for index, title in enumerate(["Parametros", "Especialista", "Execucao", "Resultados"]):
         ui.set_title(index, title)
+    ui.current_rules = current_rules
+    ui.pipeline_result = None
+    ui.result_summary = pd.DataFrame()
+    ui.consistency_matrix = pd.DataFrame()
 
     display(ui)
     return ui
