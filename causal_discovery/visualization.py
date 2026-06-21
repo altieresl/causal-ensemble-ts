@@ -283,6 +283,9 @@ def create_advanced_expert_dashboard(
     all_nodes: list[str],
     pipeline_callback, # Function to run the selection pipeline
     initial_expert_knowledge: pd.DataFrame | list[dict] | None = None,
+    initial_quick_mode: bool = True,
+    initial_n_bootstrap: int | None = None,
+    initial_parallel_jobs: int = 2,
 ):
     """
     Cria um dashboard avançado que integra a inserção de conhecimento especialista,
@@ -299,9 +302,23 @@ def create_advanced_expert_dashboard(
 
     # 1. Configurações e Parâmetros
     html_title_params = widgets.HTML("<h3>Parametros do modelo</h3>")
-    quick_mode_cb = widgets.Checkbox(value=True, description="Quick mode", indent=False)
-    parallel_jobs_ui = widgets.IntSlider(value=2, min=1, max=8, description="Jobs (Threads):", style={'description_width': 'initial'})
-    n_bootstrap_ui = widgets.IntSlider(value=4, min=1, max=50, description="Bootstraps:", style={'description_width': 'initial'})
+    initial_quick_mode = bool(initial_quick_mode)
+    default_bootstraps = 4 if initial_quick_mode else 8
+    quick_mode_cb = widgets.Checkbox(value=initial_quick_mode, description="Quick mode", indent=False)
+    parallel_jobs_ui = widgets.IntSlider(
+        value=max(1, min(8, int(initial_parallel_jobs))),
+        min=1,
+        max=8,
+        description="Jobs (Threads):",
+        style={'description_width': 'initial'},
+    )
+    n_bootstrap_ui = widgets.IntSlider(
+        value=max(1, min(50, int(initial_n_bootstrap or default_bootstraps))),
+        min=1,
+        max=50,
+        description="Bootstraps:",
+        style={'description_width': 'initial'},
+    )
     
     def on_quick_mode_change(change):
         if change.new:
@@ -385,10 +402,12 @@ def create_advanced_expert_dashboard(
         }
         current_rules.append(rule)
         update_rules_ui()
+        ui.pipeline_result = None
 
     def on_clear_rules(_):
         current_rules.clear()
         update_rules_ui()
+        ui.pipeline_result = None
 
     add_rule_btn.on_click(on_add_rule)
     clear_rules_btn.on_click(on_clear_rules)
@@ -476,6 +495,17 @@ def create_advanced_expert_dashboard(
     ui.pipeline_result = None
     ui.result_summary = pd.DataFrame()
     ui.consistency_matrix = pd.DataFrame()
+    ui.quick_mode_control = quick_mode_cb
+    ui.bootstrap_control = n_bootstrap_ui
+    ui.parallel_jobs_control = parallel_jobs_ui
+
+    def _invalidate_result(change):
+        if change.get("name") == "value":
+            ui.pipeline_result = None
+
+    quick_mode_cb.observe(_invalidate_result, names="value")
+    n_bootstrap_ui.observe(_invalidate_result, names="value")
+    parallel_jobs_ui.observe(_invalidate_result, names="value")
 
     display(ui)
     return ui

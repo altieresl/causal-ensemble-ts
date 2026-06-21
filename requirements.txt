@@ -5,6 +5,7 @@ statsmodels
 scikit-learn
 tigramite
 lingam
+causal-learn
 torch
 plotly
 ipywidgets

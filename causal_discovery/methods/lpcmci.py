@@ -10,12 +10,9 @@ from ..types import canonical_links_to_dataframe
 from ..utils import validate_numeric_dataframe
 
 
-def _has_lpcmci_edge(edge: object) -> bool:
-    if isinstance(edge, (bool, np.bool_)):
-        return bool(edge)
-    if edge is None:
-        return False
-    return str(edge).strip() not in {"", "0", "False", "None"}
+def _is_definite_forward_edge(edge: object) -> bool:
+    """Return only fully oriented source-to-target DPAG edges."""
+    return str(edge).strip() == "-->"
 
 
 def run_lpcmci(
@@ -30,6 +27,12 @@ def run_lpcmci(
     max_q_global: float = float("inf"),
     max_pds_set: int = float("inf"),
 ) -> pd.DataFrame:
+    """Run Tigramite LPCMCI and return definite directed links.
+
+    Ambiguous or bidirected DPAG marks are intentionally excluded because the
+    canonical edge table represents a directed causal claim. Reference:
+    Gerhardus and Runge (2020), NeurIPS.
+    """
     validated = validate_numeric_dataframe(data, min_rows=max_lag + 5)
     var_names = validated.columns.tolist()
     dataframe = pp.DataFrame(validated.to_numpy(), var_names=var_names)
@@ -60,7 +63,8 @@ def run_lpcmci(
     for target_idx, target in enumerate(var_names):
         for source_idx, source in enumerate(var_names):
             for lag in range(max_lag + 1):
-                if not _has_lpcmci_edge(graph[source_idx, target_idx, lag]):
+                edge_type = str(graph[source_idx, target_idx, lag]).strip()
+                if not _is_definite_forward_edge(edge_type):
                     continue
 
                 records.append(
@@ -72,6 +76,7 @@ def run_lpcmci(
                         "p_value": float(p_matrix[source_idx, target_idx, lag]) if p_matrix is not None else np.nan,
                         "q_value": float(q_matrix[source_idx, target_idx, lag]) if q_matrix is not None else np.nan,
                         "method": "LPCMCI",
+                        "edge_type": edge_type,
                     }
                 )
 

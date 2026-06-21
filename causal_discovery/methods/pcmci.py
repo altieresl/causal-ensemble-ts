@@ -10,13 +10,9 @@ from ..types import canonical_links_to_dataframe
 from ..utils import validate_numeric_dataframe
 
 
-def _has_pcmci_edge(edge: object) -> bool:
-    if isinstance(edge, (bool, np.bool_)):
-        return bool(edge)
-    if edge is None:
-        return False
-    edge_repr = str(edge).strip()
-    return edge_repr not in {"", "0", "False", "None"}
+def _is_forward_directed_edge(edge: object) -> bool:
+    """Return whether Tigramite reports a definite source-to-target edge."""
+    return str(edge).strip() == "-->"
 
 
 def run_pcmci(
@@ -26,6 +22,14 @@ def run_pcmci(
     pc_alpha: float = 0.05,
     alpha_level: float = 0.05,
 ) -> pd.DataFrame:
+    """Run Tigramite PCMCI and return definite lagged directed links.
+
+    PCMCI zero-lag links are undirected, so they are not represented as directed
+    canonical edges. Reference: Runge et al. (2019), Science Advances.
+    """
+    if max_lag < 1:
+        return canonical_links_to_dataframe([])
+
     validated = validate_numeric_dataframe(data, min_rows=max_lag + 5)
     var_names = validated.columns.tolist()
     dataframe = pp.DataFrame(validated.to_numpy(), var_names=var_names)
@@ -36,6 +40,7 @@ def run_pcmci(
         verbosity=0,
     )
     results = pcmci.run_pcmci(
+        tau_min=1,
         tau_max=max_lag,
         pc_alpha=pc_alpha,
         alpha_level=alpha_level,
@@ -49,8 +54,9 @@ def run_pcmci(
     records: list[dict] = []
     for target_idx, target in enumerate(var_names):
         for source_idx, source in enumerate(var_names):
-            for lag in range(max_lag + 1):
-                if not _has_pcmci_edge(graph[source_idx, target_idx, lag]):
+            for lag in range(1, max_lag + 1):
+                edge_type = str(graph[source_idx, target_idx, lag]).strip()
+                if not _is_forward_directed_edge(edge_type):
                     continue
 
                 records.append(
@@ -62,6 +68,7 @@ def run_pcmci(
                         "p_value": float(p_matrix[source_idx, target_idx, lag]) if p_matrix is not None else np.nan,
                         "q_value": float(q_matrix[source_idx, target_idx, lag]) if q_matrix is not None else np.nan,
                         "method": "PCMCI",
+                        "edge_type": edge_type,
                     }
                 )
 

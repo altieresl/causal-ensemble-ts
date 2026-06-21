@@ -97,19 +97,13 @@ Restricoes aceitas:
 - `expert_adjustment`: regras especialistas aplicadas.
 - `expert_effect`: efeito esperado quando informado pelo especialista.
 
-## Documentacao local
-
-- `.local/DOCUMENTACAO_FRAMEWORK.md`: documentacao conceitual e operacional.
-- `.local/APRESENTACAO_FRAMEWORK.md`: roteiro de apresentacao conceitual.
-- `.local/APRESENTACAO_CODIGO.md`: roteiro tecnico com exemplos de codigo.
-
 ## Referencias
 
-- Runge et al. (2019), *Detecting and quantifying causal associations in large nonlinear time series datasets*.
-- Runge (2018), *Causal network reconstruction from time series*.
-- Fisher (1932), *Statistical Methods for Research Workers*.
-- Benjamini and Hochberg (1995), *Controlling the False Discovery Rate*.
-- Kass and Raftery (1995), *Bayes Factors*.
-- Sellke, Bayarri and Berger (2001), *Calibration of p Values for Testing Precise Null Hypotheses*.
-- Pearl (2009), *Causality: Models, Reasoning, and Inference*.
-- Spirtes, Glymour and Scheines (2000), *Causation, Prediction, and Search*.
+- Runge et al. (2019), _Detecting and quantifying causal associations in large nonlinear time series datasets_.
+- Runge (2018), _Causal network reconstruction from time series_.
+- Fisher (1932), _Statistical Methods for Research Workers_.
+- Benjamini and Hochberg (1995), _Controlling the False Discovery Rate_.
+- Kass and Raftery (1995), _Bayes Factors_.
+- Sellke, Bayarri and Berger (2001), _Calibration of p Values for Testing Precise Null Hypotheses_.
+- Pearl (2009), _Causality: Models, Reasoning, and Inference_.
+- Spirtes, Glymour and Scheines (2000), _Causation, Prediction, and Search_.

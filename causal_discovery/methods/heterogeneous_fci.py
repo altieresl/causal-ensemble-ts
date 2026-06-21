@@ -3,19 +3,17 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from ..probabilistic import combine_p_values_fisher
 from ..types import canonical_links_to_dataframe
 from ..utils import validate_numeric_dataframe
 from .classical_granger import run_classical_granger
 
 
 def _split_contiguous_segments(data: pd.DataFrame, n_segments: int) -> list[pd.DataFrame]:
-    chunk_size = max(len(data) // n_segments, 1)
-    segments = []
-    for start in range(0, len(data), chunk_size):
-        segment = data.iloc[start : start + chunk_size]
-        if not segment.empty:
-            segments.append(segment)
-    return segments[:n_segments]
+    if n_segments <= 0:
+        raise ValueError("n_segments deve ser maior que zero.")
+    index_groups = np.array_split(np.arange(len(data)), min(n_segments, len(data)))
+    return [data.iloc[indices].copy() for indices in index_groups if len(indices) > 0]
 
 
 def run_heterogeneous_causal_discovery(
@@ -26,6 +24,10 @@ def run_heterogeneous_causal_discovery(
     n_segments: int = 4,
     min_segment_votes: int = 2,
 ) -> pd.DataFrame:
+    """Aggregate lag-specific Granger links across contiguous regimes.
+
+    This is a project-specific segmented-consensus heuristic, not FCI.
+    """
     validated = validate_numeric_dataframe(data, min_rows=max((max_lag + 5) * min_segment_votes, max_lag + 5))
     segments = [
         segment
@@ -52,7 +54,7 @@ def run_heterogeneous_causal_discovery(
         combined.groupby(["source", "target", "lag"], as_index=False)
         .agg(
             score=("score", "mean"),
-            p_value=("p_value", "mean"),
+            p_value=("p_value", combine_p_values_fisher),
             segment_votes=("segment", "nunique"),
             segments=("segment", lambda values: sorted(set(values))),
         )
@@ -67,4 +69,6 @@ def run_heterogeneous_causal_discovery(
 
 
 def run_heterogeneous_fci(data: pd.DataFrame, max_lag: int, **kwargs: object) -> pd.DataFrame:
-    return run_heterogeneous_causal_discovery(data, max_lag, **kwargs)
+    from .causal_learn import run_fci
+
+    return run_fci(data, max_lag, **kwargs)

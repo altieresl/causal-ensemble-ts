@@ -19,6 +19,11 @@ def run_score_based_search(
     *,
     min_bic_improvement: float = 1.0,
 ) -> pd.DataFrame:
+    """Select lagged predictors with forward stepwise BIC.
+
+    This is a project-specific score-based heuristic. It is not Greedy
+    Equivalence Search (GES), which searches over Markov equivalence classes.
+    """
     validated = validate_numeric_dataframe(data, min_rows=max_lag + 5)
     records: list[dict] = []
 
@@ -67,8 +72,10 @@ def run_score_based_search(
                     "target": target_name,
                     "lag": lag,
                     "score": float(final_model.params[feature_name]),
-                    "p_value": float(final_model.pvalues[feature_name]),
+                    "p_value": pd.NA,
+                    "coefficient_p_value": float(final_model.pvalues[feature_name]),
                     "method": "ScoreBasedBIC",
+                    "search_strategy": "forward_stepwise_bic",
                     "model_bic": float(final_model.bic),
                     "model_r2": float(final_model.rsquared),
                 }
@@ -78,4 +85,6 @@ def run_score_based_search(
 
 
 def run_score_based_ges(data: pd.DataFrame, max_lag: int, **kwargs: object) -> pd.DataFrame:
-    return run_score_based_search(data, max_lag, **kwargs)
+    from .causal_learn import run_score_based_ges as run_canonical_ges
+
+    return run_canonical_ges(data, max_lag, **kwargs)

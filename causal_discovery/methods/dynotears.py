@@ -107,6 +107,12 @@ def run_dynotears(
     w_threshold: float = 0.05,
     standardize: bool = True,
 ) -> pd.DataFrame:
+    """Learn contemporaneous and lagged structure with DYNOTEARS.
+
+    Implements the penalized least-squares augmented-Lagrangian formulation
+    from Pamfil et al. (2020), with one shared L1 penalty for intra- and
+    inter-slice weights.
+    """
     problem, var_names = _build_problem(data, max_lag, standardize=standardize)
     dimension = len(var_names)
     if problem.current.size == 0:
@@ -119,6 +125,7 @@ def run_dynotears(
     rho = 1.0
     alpha = 0.0
     h_value = np.inf
+    optimizer_success = False
 
     for _ in range(max_iter):
 
@@ -136,6 +143,7 @@ def run_dynotears(
         while rho < rho_max:
             result = sopt.minimize(objective, vector, method="L-BFGS-B", jac=True, bounds=bounds)
             vector = result.x
+            optimizer_success = bool(result.success)
             weights, _ = _unpack_doubled_variables(vector, dimension, max_lag)
             expm_term = slin.expm(weights * weights)
             h_new = np.trace(expm_term) - dimension
@@ -169,6 +177,9 @@ def run_dynotears(
                     "score": value,
                     "p_value": np.nan,
                     "method": "DYNOTEARS",
+                    "edge_type": "instantaneous",
+                    "acyclicity": float(h_value),
+                    "optimizer_success": optimizer_success,
                 }
             )
 
@@ -186,6 +197,9 @@ def run_dynotears(
                         "score": value,
                         "p_value": np.nan,
                         "method": "DYNOTEARS",
+                        "edge_type": "lagged",
+                        "acyclicity": float(h_value),
+                        "optimizer_success": optimizer_success,
                     }
                 )
 

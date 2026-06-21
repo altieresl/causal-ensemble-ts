@@ -18,6 +18,13 @@ def run_classical_granger(
     test_name: str = "ssr_ftest",
     include_self_links: bool = False,
 ) -> pd.DataFrame:
+    """Run pairwise linear Granger tests and identify significant exact lags.
+
+    The joint test first checks whether all source lags up to ``max_lag`` are
+    zero. Exact lag rows are then taken from the unrestricted autoregression,
+    avoiding the incorrect interpretation of a tested lag order as one exact
+    causal delay.
+    """
     validated = validate_numeric_dataframe(data, min_rows=max_lag + 5)
     records: list[dict] = []
 
@@ -33,12 +40,21 @@ def run_classical_granger(
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", FutureWarning)
-                    result = grangercausalitytests(pair, maxlag=max_lag, verbose=False)
+                    result = grangercausalitytests(pair, maxlag=[max_lag], verbose=False)
             except Exception:
                 continue
 
-            for lag, tests in result.items():
-                statistic, p_value, *_ = tests[0][test_name]
+            tests, fitted_models = result[max_lag]
+            joint_statistic, joint_p_value, *_ = tests[test_name]
+            if joint_p_value > alpha:
+                continue
+
+            unrestricted = fitted_models[1]
+            source_start = max_lag
+            for lag in range(1, max_lag + 1):
+                parameter_index = source_start + lag - 1
+                coefficient = float(unrestricted.params[parameter_index])
+                p_value = float(unrestricted.pvalues[parameter_index])
                 if p_value > alpha:
                     continue
 
@@ -47,8 +63,12 @@ def run_classical_granger(
                         "source": source,
                         "target": target,
                         "lag": lag,
-                        "score": float(statistic),
-                        "p_value": float(p_value),
+                        "score": coefficient,
+                        "p_value": p_value,
+                        "test_statistic": float(unrestricted.tvalues[parameter_index]),
+                        "joint_statistic": float(joint_statistic),
+                        "joint_p_value": float(joint_p_value),
+                        "lag_order": int(max_lag),
                         "method": "ClassicalGranger",
                     }
                 )
