@@ -385,9 +385,6 @@ def create_advanced_expert_dashboard(
         rule_status.value = f"<b>{len(current_rules)}</b> regra(s) na lista."
 
     def on_add_rule(_):
-        if source_dd.value == target_dd.value:
-            rule_status.value = "<span style='color:#b00020'>Origem e destino devem ser diferentes.</span>"
-            return
         if lag_input.value < 0:
             rule_status.value = "<span style='color:#b00020'>Lag nao pode ser negativo.</span>"
             return
@@ -498,6 +495,10 @@ def create_advanced_expert_dashboard(
     ui.quick_mode_control = quick_mode_cb
     ui.bootstrap_control = n_bootstrap_ui
     ui.parallel_jobs_control = parallel_jobs_ui
+    ui.expert_source_control = source_dd
+    ui.expert_target_control = target_dd
+    ui.expert_lag_control = lag_input
+    ui.add_expert_rule_button = add_rule_btn
 
     def _invalidate_result(change):
         if change.get("name") == "value":

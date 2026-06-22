@@ -77,6 +77,34 @@ class ExpertKnowledgeTests(unittest.TestCase):
         self.assertLess(adjusted.loc[0, "edge_probability"], 0.8)
         self.assertEqual(adjusted.loc[0, "expert_effect"], "forbidden")
 
+    def test_self_link_rule_is_applied(self):
+        rules = [
+            {
+                "source": "x",
+                "target": "x",
+                "lag": 1,
+                "relation": "strong",
+                "constraint": "soft",
+                "confidence": 0.8,
+            }
+        ]
+        summary = pd.DataFrame(
+            [
+                {
+                    "source": "x",
+                    "target": "x",
+                    "lag": 1,
+                    "edge_probability": 0.4,
+                    "uncertainty": 0.6,
+                }
+            ]
+        )
+
+        adjusted = apply_expert_knowledge_to_summary(summary, rules)
+
+        self.assertEqual(adjusted.loc[0, "expert_adjustment"], "soft_strong")
+        self.assertGreater(adjusted.loc[0, "edge_probability"], 0.4)
+
 
 if __name__ == "__main__":
     unittest.main()
