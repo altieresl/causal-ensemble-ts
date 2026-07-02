@@ -34,6 +34,27 @@ def _display_plotly_figure(fig: object) -> None:
         display(HTML(html))
 
 
+def _display_scrollable_dataframe(frame: pd.DataFrame, *, max_rows: int = 50) -> None:
+    from IPython.display import HTML, display
+
+    if frame is None:
+        frame = pd.DataFrame()
+
+    preview = frame.head(max_rows)
+    table_html = preview.to_html(index=False, escape=False, na_rep="")
+    display(
+        HTML(
+            f"""
+            <div style="max-height: 420px; overflow: auto; border: 1px solid #d0d7de; border-radius: 6px;">
+              <div style="min-width: max-content; padding: 4px 8px;">
+                {table_html}
+              </div>
+            </div>
+            """
+        )
+    )
+
+
 def filter_probabilistic_edges(
     summary: pd.DataFrame,
     *,
@@ -268,7 +289,7 @@ def create_interactive_ensemble_dashboard(
 
         with output_table:
             output_table.clear_output(wait=True)
-            display(filtered.head(50))
+            _display_scrollable_dataframe(filtered, max_rows=50)
 
         with output_consistency:
             output_consistency.clear_output(wait=True)
