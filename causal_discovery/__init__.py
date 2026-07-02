@@ -18,6 +18,7 @@ from .visualization import (
     filter_probabilistic_edges,
     plot_method_consistency_heatmap,
     plot_probabilistic_causal_graph,
+    plot_temporal_dag,
 )
 
 __all__ = [
@@ -34,6 +35,7 @@ __all__ = [
     "normalize_expert_knowledge",
     "plot_method_consistency_heatmap",
     "plot_probabilistic_causal_graph",
+    "plot_temporal_dag",
     "run_bootstrap_stability_selection",
     "run_method_suite",
     "select_robust_ensemble_combination",

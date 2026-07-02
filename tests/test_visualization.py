@@ -3,10 +3,23 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from causal_discovery.visualization import create_advanced_expert_dashboard
+from causal_discovery.visualization import create_advanced_expert_dashboard, plot_temporal_dag
 
 
 class AdvancedDashboardTests(unittest.TestCase):
+    @patch("causal_discovery.visualization._require_plotly")
+    def test_plot_temporal_dag_returns_figure_for_empty_summary(self, mock_require_plotly):
+        class FakeFigure:
+            def update_layout(self, **_kwargs):
+                return None
+
+        class FakeGo:
+            Figure = FakeFigure
+
+        mock_require_plotly.return_value = (None, FakeGo)
+        fig = plot_temporal_dag(pd.DataFrame())
+        self.assertIsNotNone(fig)
+
     @patch("IPython.display.display")
     def test_dashboard_preserves_initial_state(self, _display):
         rules = [

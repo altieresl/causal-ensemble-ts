@@ -228,6 +228,7 @@ def create_interactive_ensemble_dashboard(
     target_dropdown = widgets.Dropdown(options=node_options, value="Todos", description="Destino")
 
     output_graph = widgets.Output()
+    output_dag = widgets.Output()
     output_table = widgets.Output()
     output_consistency = widgets.Output()
 
@@ -248,10 +249,22 @@ def create_interactive_ensemble_dashboard(
             target=target_dropdown.value,
             title="Grafo causal filtrado",
         )
+        dag = plot_temporal_dag(
+            probabilistic_summary,
+            min_probability=min_prob.value,
+            max_lag=lag_slider.value,
+            source=source_dropdown.value,
+            target=target_dropdown.value,
+            title="DAG temporal filtrado",
+        )
 
         with output_graph:
             output_graph.clear_output(wait=True)
             _display_plotly_figure(fig)
+
+        with output_dag:
+            output_dag.clear_output(wait=True)
+            _display_plotly_figure(dag)
 
         with output_table:
             output_table.clear_output(wait=True)
@@ -269,7 +282,7 @@ def create_interactive_ensemble_dashboard(
     target_dropdown.observe(_refresh, names="value")
 
     controls = widgets.HBox([min_prob, lag_slider, source_dropdown, target_dropdown])
-    dashboard = widgets.VBox([controls, output_graph, output_table, output_consistency])
+    dashboard = widgets.VBox([controls, output_graph, output_dag, output_table, output_consistency])
 
     _refresh()
     display(dashboard)
@@ -510,3 +523,168 @@ def create_advanced_expert_dashboard(
 
     display(ui)
     return ui
+
+
+def plot_temporal_dag(
+    summary: pd.DataFrame,
+    *,
+    min_probability: float = 0.5,
+    max_lag: int | None = None,
+    source: str | None = None,
+    target: str | None = None,
+    max_edges: int | None = 12,
+    title: str = "DAG temporal",
+):
+    _, go = _require_plotly()
+    filtered = filter_probabilistic_edges(
+        summary,
+        min_probability=min_probability,
+        max_lag=max_lag,
+        source=source,
+        target=target,
+    ).copy()
+
+    if filtered.empty:
+        fig = go.Figure()
+        fig.update_layout(title=f"{title} (sem arestas com o filtro atual)")
+        return fig
+
+    filtered["lag"] = pd.to_numeric(filtered.get("lag"), errors="coerce").fillna(0).astype(int)
+    filtered = filtered[filtered["lag"] >= 0]
+    if filtered.empty:
+        fig = go.Figure()
+        fig.update_layout(title=f"{title} (sem lags validos)")
+        return fig
+
+    sort_columns = [column for column in ["edge_probability", "confidence", "lag"] if column in filtered.columns]
+    if sort_columns:
+        filtered = filtered.sort_values(sort_columns, ascending=[False] * len(sort_columns))
+    if max_edges is not None:
+        filtered = filtered.head(int(max_edges)).reset_index(drop=True)
+
+    variables = sorted(set(filtered["source"].astype(str)) | set(filtered["target"].astype(str)))
+    max_lag_value = int(filtered["lag"].max()) if not filtered.empty else 0
+    lag_levels = list(range(max_lag_value, -1, -1))
+
+    x_positions = {lag: index for index, lag in enumerate(lag_levels)}
+    y_positions = {variable: len(variables) - index - 1 for index, variable in enumerate(variables)}
+
+    fig = go.Figure()
+
+    for lag in lag_levels:
+        x_coord = x_positions[lag]
+        fig.add_shape(
+            type="line",
+            x0=x_coord,
+            x1=x_coord,
+            y0=-0.7,
+            y1=max(len(variables) - 0.3, 0.3),
+            line={"color": "rgba(120, 144, 156, 0.25)", "width": 1, "dash": "dot"},
+        )
+        label = "t" if lag == 0 else f"t-{lag}"
+        fig.add_annotation(
+            x=x_coord,
+            y=len(variables) + 0.05,
+            text=label,
+            showarrow=False,
+            font={"size": 13, "color": "#455a64"},
+        )
+
+    for _, edge in filtered.iterrows():
+        source_name = str(edge["source"])
+        target_name = str(edge["target"])
+        lag = int(edge["lag"])
+        probability = float(edge.get("edge_probability", 0.0))
+        confidence_value = edge.get("confidence", np.nan)
+        confidence = float(confidence_value) if pd.notna(confidence_value) else 0.0
+        width = 1.5 + 5.5 * probability
+        color = f"rgba(0, 121, 107, {0.25 + 0.75 * max(confidence, probability)})"
+
+        x0 = x_positions[lag]
+        x1 = x_positions[0]
+        y0 = y_positions[source_name]
+        y1 = y_positions[target_name]
+
+        fig.add_trace(
+            go.Scatter(
+                x=[x0, x1],
+                y=[y0, y1],
+                mode="lines",
+                line={"width": width, "color": color},
+                hoverinfo="text",
+                text=(
+                    f"{source_name}(t-{lag}) -> {target_name}(t)<br>"
+                    f"prob={probability:.3f}<br>"
+                    f"conf={confidence:.3f}"
+                ),
+                showlegend=False,
+            )
+        )
+        fig.add_annotation(
+            x=x1,
+            y=y1,
+            ax=x0,
+            ay=y0,
+            xref="x",
+            yref="y",
+            axref="x",
+            ayref="y",
+            showarrow=True,
+            arrowhead=3,
+            arrowsize=1.2,
+            arrowwidth=max(1.2, width * 0.45),
+            arrowcolor=color,
+            opacity=0.9,
+        )
+
+    node_x = []
+    node_y = []
+    node_text = []
+    node_hover = []
+    for variable in variables:
+        y_coord = y_positions[variable]
+        for lag in lag_levels:
+            if lag != 0 and not ((filtered["source"].astype(str) == variable) & (filtered["lag"] == lag)).any():
+                continue
+            x_coord = x_positions[lag]
+            label = f"{variable} (t)" if lag == 0 else f"{variable} (t-{lag})"
+            node_x.append(x_coord)
+            node_y.append(y_coord)
+            node_text.append(label)
+            node_hover.append(label)
+
+    fig.add_trace(
+        go.Scatter(
+            x=node_x,
+            y=node_y,
+            mode="markers",
+            marker={"size": 28, "color": "#f4a261", "line": {"width": 1.5, "color": "#ffffff"}},
+            hoverinfo="text",
+            hovertext=node_hover,
+            showlegend=False,
+        )
+    )
+    for x_coord, y_coord, label in zip(node_x, node_y, node_text):
+        fig.add_annotation(
+            x=x_coord,
+            y=y_coord + 0.32,
+            text=label,
+            showarrow=False,
+            xanchor="center",
+            yanchor="bottom",
+            font={"size": 11, "color": "#1f2933"},
+            bgcolor="rgba(255, 255, 255, 0.82)",
+            bordercolor="rgba(255, 255, 255, 0.0)",
+            borderpad=2,
+        )
+
+    fig.update_layout(
+        title=title,
+        template="plotly_white",
+        xaxis={"visible": False},
+        yaxis={"visible": False},
+        margin={"l": 30, "r": 30, "t": 80, "b": 30},
+        plot_bgcolor="#fcfcf8",
+        paper_bgcolor="#ffffff",
+    )
+    return fig
