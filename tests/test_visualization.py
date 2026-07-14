@@ -3,10 +3,32 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from causal_discovery.visualization import create_advanced_expert_dashboard, plot_temporal_dag
+from causal_discovery.visualization import (
+    create_advanced_expert_dashboard,
+    plot_probabilistic_causal_graph,
+    plot_temporal_dag,
+)
 
 
 class AdvancedDashboardTests(unittest.TestCase):
+    def test_probabilistic_graph_draws_visible_self_loop(self):
+        summary = pd.DataFrame(
+            [
+                {
+                    "source": "x",
+                    "target": "x",
+                    "lag": 1,
+                    "edge_probability": 0.8,
+                    "confidence": 0.7,
+                }
+            ]
+        )
+
+        fig = plot_probabilistic_causal_graph(summary)
+        coordinates = set(zip(fig.data[0].x, fig.data[0].y))
+
+        self.assertGreater(len(coordinates), 2)
+
     @patch("causal_discovery.visualization._require_plotly")
     def test_plot_temporal_dag_returns_figure_for_empty_summary(self, mock_require_plotly):
         class FakeFigure:

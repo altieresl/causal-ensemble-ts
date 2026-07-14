@@ -10,7 +10,12 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from .ensemble import run_method_suite, summarize_ensemble, summarize_probabilistic_ensemble
+from .ensemble import (
+    _label_method_output,
+    run_method_suite,
+    summarize_ensemble,
+    summarize_probabilistic_ensemble,
+)
 from .expert_knowledge import apply_expert_knowledge_to_summary, extract_method_weights
 
 MetricScoreFn = Callable[[dict[str, float], pd.DataFrame, pd.DataFrame, pd.DataFrame], float]
@@ -35,7 +40,7 @@ def _run_method_suite_fast(
         }
         for future in as_completed(futures):
             name = futures[future]
-            outputs[name] = future.result()
+            outputs[name] = _label_method_output(name, future.result())
 
     return outputs
 

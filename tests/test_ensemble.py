@@ -4,6 +4,7 @@ import unittest
 import pandas as pd
 
 from causal_discovery.ensemble import (
+    run_method_suite,
     summarize_ensemble,
     summarize_probabilistic_ensemble,
 )
@@ -72,6 +73,49 @@ class EnsembleSummaryTests(unittest.TestCase):
         self.assertTrue(summary.empty)
         self.assertIn("edge_probability", summary.columns)
         self.assertIn("support_ratio", summary.columns)
+
+    def test_score_fallback_does_not_cancel_opposite_effect_signs(self):
+        negative = pd.DataFrame(
+            [{"source": "x", "target": "y", "lag": 1, "score": -1.0, "method": "M1"}]
+        )
+        positive = pd.DataFrame(
+            [{"source": "x", "target": "y", "lag": 1, "score": 1.0, "method": "M2"}]
+        )
+
+        summary = summarize_probabilistic_ensemble(
+            [negative, positive],
+            min_votes=2,
+            posterior_weight=1.0,
+            method_names=["M1", "M2"],
+        )
+
+        self.assertGreater(summary.loc[0, "posterior_probability"], 0.7)
+
+    def test_method_registry_name_controls_output_label_and_weight(self):
+        def internally_named(_data):
+            return pd.DataFrame(
+                [
+                    {
+                        "source": "x",
+                        "target": "y",
+                        "lag": 1,
+                        "score": 1.0,
+                        "p_value": None,
+                        "method": "InternalName",
+                    }
+                ]
+            )
+
+        outputs = run_method_suite(pd.DataFrame({"x": [1]}), {"Alias": internally_named})
+        summary = summarize_probabilistic_ensemble(
+            list(outputs.values()),
+            min_votes=1,
+            method_names=["Alias"],
+            method_weights={"Alias": 10.0},
+        )
+
+        self.assertEqual(summary.loc[0, "method"], ["Alias"])
+        self.assertAlmostEqual(summary.loc[0, "weighted_support_ratio"], 1.0)
 
 
 if __name__ == "__main__":

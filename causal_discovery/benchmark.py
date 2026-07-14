@@ -98,18 +98,25 @@ def inject_noise_regime_change(
     noise_multiplier: float = 3.0,
     random_state: int | None = 42,
 ):
-    """Injeta uma quebra de regime por aumento de ruído após um índice."""
+    """Injeta uma mudança no regime de ruído após uma posição temporal."""
     if not 0 <= index_change < len(df):
         raise ValueError("index_change deve estar dentro dos limites do DataFrame.")
+    if noise_multiplier < 0.0:
+        raise ValueError("noise_multiplier nao pode ser negativo.")
 
     rng = np.random.default_rng(random_state)
-    noisy = df.copy()
-    for column in noisy.columns:
+    try:
+        noisy = df.astype(float).copy()
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Todas as colunas devem ser numericas.") from exc
+
+    for column_index in range(noisy.shape[1]):
+        values = noisy.iloc[:, column_index].to_numpy()
         noise = rng.normal(
             0,
-            np.std(noisy[column]) * noise_multiplier,
+            np.std(values) * noise_multiplier,
             len(noisy) - index_change,
         )
-        noisy.loc[index_change:, column] += noise
+        noisy.iloc[index_change:, column_index] = values[index_change:] + noise
 
     return noisy

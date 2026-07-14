@@ -7,6 +7,19 @@ import numpy as np
 import pandas as pd
 
 
+def _self_loop_coordinates(
+    x: float,
+    y: float,
+    *,
+    radius: float = 0.18,
+) -> tuple[list[float], list[float]]:
+    """Cria um arco fechado visivel para uma aresta cujo inicio e fim coincidem."""
+    angles = np.linspace(0.0, 2.0 * math.pi, 32)
+    loop_x = x + radius * (1.0 - np.cos(angles))
+    loop_y = y + radius * np.sin(angles)
+    return loop_x.tolist(), loop_y.tolist()
+
+
 def _require_plotly() -> tuple[object, object]:
     try:
         import plotly.express as px
@@ -131,11 +144,19 @@ def plot_probabilistic_causal_graph(
         lag = int(edge.get("lag", 0))
         width = 1.0 + 5.0 * probability
         color = f"rgba(30, 136, 229, {0.2 + 0.8 * confidence})"
+        if source_name == target_name:
+            edge_x, edge_y = _self_loop_coordinates(x0, y0)
+            arrow_x, arrow_y = edge_x[-1], edge_y[-1]
+            arrow_ax, arrow_ay = edge_x[-4], edge_y[-4]
+        else:
+            edge_x, edge_y = [x0, x1], [y0, y1]
+            arrow_x, arrow_y = x1, y1
+            arrow_ax, arrow_ay = x0, y0
 
         fig.add_trace(
             go.Scatter(
-                x=[x0, x1],
-                y=[y0, y1],
+                x=edge_x,
+                y=edge_y,
                 mode="lines",
                 line={"width": width, "color": color},
                 hoverinfo="text",
@@ -149,10 +170,10 @@ def plot_probabilistic_causal_graph(
             )
         )
         fig.add_annotation(
-            x=x1,
-            y=y1,
-            ax=x0,
-            ay=y0,
+            x=arrow_x,
+            y=arrow_y,
+            ax=arrow_ax,
+            ay=arrow_ay,
             xref="x",
             yref="y",
             axref="x",
@@ -625,11 +646,19 @@ def plot_temporal_dag(
         x1 = x_positions[0]
         y0 = y_positions[source_name]
         y1 = y_positions[target_name]
+        if x0 == x1 and y0 == y1:
+            edge_x, edge_y = _self_loop_coordinates(x0, y0, radius=0.22)
+            arrow_x, arrow_y = edge_x[-1], edge_y[-1]
+            arrow_ax, arrow_ay = edge_x[-4], edge_y[-4]
+        else:
+            edge_x, edge_y = [x0, x1], [y0, y1]
+            arrow_x, arrow_y = x1, y1
+            arrow_ax, arrow_ay = x0, y0
 
         fig.add_trace(
             go.Scatter(
-                x=[x0, x1],
-                y=[y0, y1],
+                x=edge_x,
+                y=edge_y,
                 mode="lines",
                 line={"width": width, "color": color},
                 hoverinfo="text",
@@ -642,10 +671,10 @@ def plot_temporal_dag(
             )
         )
         fig.add_annotation(
-            x=x1,
-            y=y1,
-            ax=x0,
-            ay=y0,
+            x=arrow_x,
+            y=arrow_y,
+            ax=arrow_ax,
+            ay=arrow_ay,
             xref="x",
             yref="y",
             axref="x",

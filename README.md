@@ -90,6 +90,8 @@ Restricoes aceitas:
 
 - `edge_probability`: probabilidade estimada da aresta.
 - `posterior_probability`: probabilidade posterior aproximada.
+- `data_edge_probability`: probabilidade do ensemble antes das regras especialistas.
+- `expert_adjusted_probability`: probabilidade final depois das regras especialistas, quando fornecidas.
 - `combined_p_value`: p-value agregado quando disponivel.
 - `support_ratio`: fracao de metodos que apoiam a aresta.
 - `support_ci_low` / `support_ci_high`: intervalo de Wilson para suporte.

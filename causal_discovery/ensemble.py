@@ -47,9 +47,19 @@ def run_method_suite(
     method_kwargs = method_kwargs or {}
 
     for name, method in methods.items():
-        outputs[name] = method(data, **method_kwargs.get(name, {}))
+        outputs[name] = _label_method_output(
+            name,
+            method(data, **method_kwargs.get(name, {})),
+        )
 
     return outputs
+
+
+def _label_method_output(name: str, output: pd.DataFrame) -> pd.DataFrame:
+    """Alinha a coluna canonica ``method`` ao nome usado no registro do ensemble."""
+    frame = output.copy()
+    frame["method"] = str(name)
+    return frame
 
 
 def _empty_ensemble_frame() -> pd.DataFrame:
@@ -167,10 +177,16 @@ def summarize_probabilistic_ensemble(
     if total_method_weight <= 0.0:
         total_method_weight = float(total_methods)
 
-    scores = pd.to_numeric(ensemble.get("score", pd.Series(dtype=float)), errors="coerce").abs()
-    scale = float(scores.median()) if not scores.empty else 1.0
-    if not np.isfinite(scale) or scale <= 0.0:
-        scale = 1.0
+    score_values = pd.to_numeric(
+        ensemble.get("score", pd.Series(dtype=float)),
+        errors="coerce",
+    ).abs()
+    score_scales = (
+        ensemble.assign(_abs_score=score_values)
+        .groupby("method", dropna=False)["_abs_score"]
+        .median()
+        .to_dict()
+    )
 
     posterior_weight = min(max(float(posterior_weight), 0.0), 1.0)
     rows: list[dict] = []
@@ -205,7 +221,20 @@ def summarize_probabilistic_ensemble(
                 prior_edge_probability=prior_edge_probability,
             )
         else:
-            posterior_probability = score_to_probability(mean_score, scale=scale)
+            score_probabilities: list[float] = []
+            for _, method_row in group.iterrows():
+                score = pd.to_numeric(method_row.get("score"), errors="coerce")
+                if not np.isfinite(score):
+                    continue
+                scale = float(score_scales.get(method_row.get("method"), 1.0))
+                if not np.isfinite(scale) or scale <= 0.0:
+                    scale = 1.0
+                score_probabilities.append(
+                    score_to_probability(float(score), scale=scale)
+                )
+            posterior_probability = (
+                float(np.mean(score_probabilities)) if score_probabilities else 0.5
+            )
 
         edge_probability = (
             posterior_weight * posterior_probability

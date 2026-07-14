@@ -14,6 +14,13 @@ class ProbabilisticTests(unittest.TestCase):
         self.assertGreater(combined, 0.0)
         self.assertLessEqual(combined, 1.0)
 
+    def test_fisher_combination_clips_zero_p_values_instead_of_discarding_them(self):
+        with_zero = combine_p_values_fisher([0.0, 0.05])
+        without_zero = combine_p_values_fisher([0.05])
+
+        self.assertGreater(with_zero, 0.0)
+        self.assertLess(with_zero, without_zero)
+
     def test_score_to_probability_is_bounded(self):
         self.assertGreater(score_to_probability(10.0, scale=1.0), 0.5)
         self.assertGreater(score_to_probability(float("nan")), 0.0)

@@ -13,10 +13,12 @@ def _clip_probability(value: float, *, eps: float = 1e-12) -> float:
 
 def combine_p_values_fisher(p_values: pd.Series) -> float:
     numeric = pd.to_numeric(pd.Series(p_values), errors="coerce").dropna()
-    numeric = numeric[(numeric > 0.0) & (numeric <= 1.0)]
+    numeric = numeric[(numeric >= 0.0) & (numeric <= 1.0)]
     if numeric.empty:
         return float("nan")
 
+    # Testes estatisticos podem retornar zero por underflow numerico. Esse valor
+    # representa evidencia forte e deve ser limitado, nao descartado.
     clipped = numeric.clip(1e-16, 1.0)
     statistic = float(-2.0 * np.log(clipped).sum())
     dof = 2 * len(clipped)

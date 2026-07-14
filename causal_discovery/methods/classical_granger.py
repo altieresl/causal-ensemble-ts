@@ -4,6 +4,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
+from statsmodels.tsa.ar_model import AutoReg
 from statsmodels.tsa.stattools import grangercausalitytests
 
 from ..types import canonical_links_to_dataframe
@@ -23,14 +24,52 @@ def run_classical_granger(
     The joint test first checks whether all source lags up to ``max_lag`` are
     zero. Exact lag rows are then taken from the unrestricted autoregression,
     avoiding the incorrect interpretation of a tested lag order as one exact
-    causal delay.
+    causal delay. When ``include_self_links`` is enabled, autoregressive terms
+    are estimated separately; they represent persistence, not bivariate
+    Granger causality.
     """
     validated = validate_numeric_dataframe(data, min_rows=max_lag + 5)
     records: list[dict] = []
 
     for target in validated.columns:
         for source in validated.columns:
-            if not include_self_links and source == target:
+            if source == target:
+                if not include_self_links:
+                    continue
+                series = validated[target].dropna()
+                try:
+                    autoregression = AutoReg(
+                        series,
+                        lags=max_lag,
+                        trend="c",
+                        old_names=False,
+                    ).fit()
+                except Exception:
+                    continue
+
+                for lag in range(1, max_lag + 1):
+                    parameter_index = lag
+                    coefficient = float(autoregression.params.iloc[parameter_index])
+                    p_value = float(autoregression.pvalues.iloc[parameter_index])
+                    if p_value > alpha:
+                        continue
+                    records.append(
+                        {
+                            "source": source,
+                            "target": target,
+                            "lag": lag,
+                            "score": coefficient,
+                            "p_value": p_value,
+                            "test_statistic": float(
+                                autoregression.tvalues.iloc[parameter_index]
+                            ),
+                            "joint_statistic": np.nan,
+                            "joint_p_value": np.nan,
+                            "lag_order": int(max_lag),
+                            "method": "ClassicalGranger",
+                            "edge_type": "autoregressive",
+                        }
+                    )
                 continue
 
             pair = validated[[target, source]].dropna()

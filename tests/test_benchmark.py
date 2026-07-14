@@ -37,6 +37,19 @@ class BenchmarkTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             inject_noise_regime_change(data, index_change=30)
 
+    def test_noise_injection_uses_position_with_datetime_index(self):
+        data = pd.DataFrame(
+            {"x": [1.0, 2.0, 3.0, 4.0]},
+            index=pd.date_range("2024-01-01", periods=4),
+        )
+
+        noisy = inject_noise_regime_change(data, index_change=2, random_state=8)
+
+        pd.testing.assert_series_equal(noisy.iloc[:2, 0], data.iloc[:2, 0])
+        self.assertEqual(noisy.index.tolist(), data.index.tolist())
+        with self.assertRaises(ValueError):
+            inject_noise_regime_change(data, index_change=2, noise_multiplier=-1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

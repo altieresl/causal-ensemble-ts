@@ -55,6 +55,23 @@ class ClassicalGrangerTests(unittest.TestCase):
         self.assertTrue((links["lag_order"] == 3).all())
         self.assertTrue((links["joint_p_value"] <= 0.01).all())
 
+    def test_optional_self_links_are_reported_as_autoregressive(self):
+        rng = np.random.default_rng(11)
+        values = np.zeros(500)
+        for time in range(1, len(values)):
+            values[time] = 0.85 * values[time - 1] + rng.normal(scale=0.2)
+
+        result = run_classical_granger(
+            pd.DataFrame({"x": values}),
+            max_lag=2,
+            alpha=0.01,
+            include_self_links=True,
+        )
+
+        self.assertFalse(result.empty)
+        self.assertTrue((result["source"] == result["target"]).all())
+        self.assertTrue((result["edge_type"] == "autoregressive").all())
+
 
 class CompatibilityAliasTests(unittest.TestCase):
     def test_segment_split_preserves_all_rows(self):

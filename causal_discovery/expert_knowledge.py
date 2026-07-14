@@ -115,6 +115,10 @@ def apply_expert_knowledge_to_summary(
         return output
 
     output = summary.copy()
+    if "data_edge_probability" not in output.columns:
+        output["data_edge_probability"] = output.get("edge_probability", 0.0)
+    if "expert_adjusted_probability" not in output.columns:
+        output["expert_adjusted_probability"] = output.get("edge_probability", 0.0)
     if "expert_adjustment" not in output.columns:
         output["expert_adjustment"] = "none"
     if "expert_confidence" not in output.columns:
@@ -149,8 +153,7 @@ def apply_expert_knowledge_to_summary(
         output.at[idx, "expert_effect"] = "|".join(applied_effects) if applied_effects else "unknown"
         output.at[idx, "expert_confidence"] = float(max_confidence)
 
-        if "posterior_probability" in output.columns:
-            output.at[idx, "posterior_probability"] = current_probability
+        output.at[idx, "expert_adjusted_probability"] = current_probability
 
     if hard_filter:
         forbidden = output["expert_adjustment"].astype(str).str.contains("hard_forbidden", regex=False)

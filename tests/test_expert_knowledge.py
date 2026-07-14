@@ -105,6 +105,39 @@ class ExpertKnowledgeTests(unittest.TestCase):
         self.assertEqual(adjusted.loc[0, "expert_adjustment"], "soft_strong")
         self.assertGreater(adjusted.loc[0, "edge_probability"], 0.4)
 
+    def test_expert_adjustment_preserves_data_posterior(self):
+        rules = [
+            {
+                "source": "x",
+                "target": "y",
+                "lag": 1,
+                "relation": "strong",
+                "constraint": "soft",
+                "confidence": 0.8,
+            }
+        ]
+        summary = pd.DataFrame(
+            [
+                {
+                    "source": "x",
+                    "target": "y",
+                    "lag": 1,
+                    "posterior_probability": 0.3,
+                    "edge_probability": 0.4,
+                    "uncertainty": 0.6,
+                }
+            ]
+        )
+
+        adjusted = apply_expert_knowledge_to_summary(summary, rules)
+
+        self.assertAlmostEqual(adjusted.loc[0, "posterior_probability"], 0.3)
+        self.assertAlmostEqual(adjusted.loc[0, "data_edge_probability"], 0.4)
+        self.assertAlmostEqual(
+            adjusted.loc[0, "expert_adjusted_probability"],
+            adjusted.loc[0, "edge_probability"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
