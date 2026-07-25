@@ -102,6 +102,11 @@ def _deduplicate_method_edges(ensemble: pd.DataFrame) -> pd.DataFrame:
         return ensemble
 
     frame = ensemble.copy()
+    if {"source", "target"}.issubset(frame.columns):
+        frame = frame.loc[frame["source"].ne(frame["target"])].copy()
+    if frame.empty:
+        return frame
+
     if "method" not in frame.columns:
         frame["method"] = "unknown"
     if "score" not in frame.columns:
