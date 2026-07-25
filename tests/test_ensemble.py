@@ -11,6 +11,27 @@ from causal_discovery.ensemble import (
 
 
 class EnsembleSummaryTests(unittest.TestCase):
+    def test_self_links_are_excluded_from_ensemble_summaries(self):
+        result = pd.DataFrame(
+            [
+                {"source": "x", "target": "x", "lag": 1, "score": 2.0, "p_value": 0.01, "method": "M1"},
+                {"source": "x", "target": "y", "lag": 1, "score": 1.0, "p_value": 0.02, "method": "M1"},
+            ]
+        )
+
+        vote_summary = summarize_ensemble([result], min_votes=1)
+        probabilistic_summary = summarize_probabilistic_ensemble(
+            [result],
+            min_votes=1,
+            method_names=["M1"],
+        )
+
+        self.assertEqual(list(zip(vote_summary["source"], vote_summary["target"])), [("x", "y")])
+        self.assertEqual(
+            list(zip(probabilistic_summary["source"], probabilistic_summary["target"])),
+            [("x", "y")],
+        )
+
     def test_duplicate_edges_from_same_method_count_as_one_vote(self):
         result = pd.DataFrame(
             [
