@@ -73,6 +73,39 @@ class AdvancedDashboardTests(unittest.TestCase):
         self.assertEqual(dashboard.parallel_jobs_control.value, 3)
         self.assertEqual(dashboard.current_rules, rules)
         self.assertIsNone(dashboard.pipeline_result)
+        self.assertEqual(
+            set(dashboard.relation_selection_control.value),
+            {("x", "y"), ("y", "x")},
+        )
+
+    @patch("causal_discovery.visualization.create_interactive_ensemble_dashboard")
+    @patch("IPython.display.display")
+    def test_dashboard_passes_selected_directional_relations(
+        self,
+        _display,
+        _interactive_dashboard,
+    ):
+        received = {}
+
+        def pipeline_callback(**kwargs):
+            received.update(kwargs)
+            return pd.DataFrame(), pd.DataFrame()
+
+        dashboard = create_advanced_expert_dashboard(
+            processed_data=pd.DataFrame({"x": [1, 2], "y": [2, 3]}),
+            candidate_methods={"A": lambda data: pd.DataFrame()},
+            candidate_method_kwargs={"A": {}},
+            method_weights={"A": 1.0},
+            all_nodes=["x", "y"],
+            pipeline_callback=pipeline_callback,
+        )
+        dashboard.relation_selection_control.value = (("x", "y"),)
+
+        run_button = dashboard.children[2].children[1]
+        run_button.click()
+
+        self.assertEqual(received["selected_relations"], [("x", "y")])
+        self.assertEqual(dashboard.selected_relations, [("x", "y")])
 
     @patch("IPython.display.display")
     def test_dashboard_accepts_rule_with_same_source_and_target(self, _display):

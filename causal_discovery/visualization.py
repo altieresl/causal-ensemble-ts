@@ -348,6 +348,7 @@ def create_advanced_expert_dashboard(
     """
     widgets = _require_widgets()
     from IPython.display import display
+    import inspect
     import json
 
     if not all_nodes:
@@ -386,6 +387,56 @@ def create_advanced_expert_dashboard(
         quick_mode_cb,
         n_bootstrap_ui,
         parallel_jobs_ui
+    ])
+
+    relation_options = [
+        (f"{source} \u2192 {target}", (source, target))
+        for source in all_nodes
+        for target in all_nodes
+        if source != target
+    ]
+    relations_select = widgets.SelectMultiple(
+        options=relation_options,
+        value=tuple(value for _, value in relation_options),
+        description="Relacoes:",
+        style={"description_width": "initial"},
+        layout=widgets.Layout(width="500px", height="180px"),
+    )
+    select_all_relations_btn = widgets.Button(
+        description="Selecionar todas",
+        layout=widgets.Layout(width="245px"),
+    )
+    clear_relations_btn = widgets.Button(
+        description="Limpar selecao",
+        layout=widgets.Layout(width="245px"),
+    )
+    relation_status = widgets.HTML("")
+
+    def update_relation_status():
+        relation_status.value = (
+            f"<b>{len(relations_select.value)}</b> de "
+            f"<b>{len(relation_options)}</b> relacao(oes) selecionada(s)."
+        )
+
+    def on_select_all_relations(_):
+        relations_select.value = tuple(value for _, value in relation_options)
+
+    def on_clear_relations(_):
+        relations_select.value = ()
+
+    select_all_relations_btn.on_click(on_select_all_relations)
+    clear_relations_btn.on_click(on_clear_relations)
+    relations_select.observe(lambda change: update_relation_status(), names="value")
+    update_relation_status()
+
+    relations_controls = widgets.VBox([
+        widgets.HTML(
+            "<h3>Relacoes analisadas</h3>"
+            "<p>Selecione pares direcionais. Autorelacoes nao sao oferecidas.</p>"
+        ),
+        relations_select,
+        widgets.HBox([select_all_relations_btn, clear_relations_btn]),
+        relation_status,
     ])
 
     # 2. Conhecimento Especialista
@@ -498,16 +549,30 @@ def create_advanced_expert_dashboard(
             dash_output.clear_output(wait=True)
             
         try:
-            # Chama o wrapper do pipeline
+            selected_relations = list(relations_select.value)
+            if not selected_relations:
+                raise ValueError("Selecione pelo menos uma relacao para analisar.")
+
+            callback_kwargs = {
+                "quick_mode": quick_mode_cb.value,
+                "n_bootstrap": n_bootstrap_ui.value,
+                "parallel_jobs": parallel_jobs_ui.value,
+                "expert_knowledge": current_rules,
+                "processed_data": processed_data,
+                "candidate_methods": candidate_methods,
+                "candidate_method_kwargs": candidate_method_kwargs,
+                "method_weights": method_weights,
+            }
+            callback_parameters = inspect.signature(pipeline_callback).parameters
+            accepts_extra_kwargs = any(
+                parameter.kind == inspect.Parameter.VAR_KEYWORD
+                for parameter in callback_parameters.values()
+            )
+            if "selected_relations" in callback_parameters or accepts_extra_kwargs:
+                callback_kwargs["selected_relations"] = selected_relations
+
             callback_result = pipeline_callback(
-                quick_mode=quick_mode_cb.value,
-                n_bootstrap=n_bootstrap_ui.value,
-                parallel_jobs=parallel_jobs_ui.value,
-                expert_knowledge=current_rules,
-                processed_data=processed_data,
-                candidate_methods=candidate_methods,
-                candidate_method_kwargs=candidate_method_kwargs,
-                method_weights=method_weights
+                **callback_kwargs
             )
             if isinstance(callback_result, Mapping):
                 result_summary = callback_result.get("probabilistic_summary", pd.DataFrame())
@@ -518,6 +583,7 @@ def create_advanced_expert_dashboard(
             ui.result_summary = result_summary
             ui.consistency_matrix = consistency
             ui.current_rules = current_rules
+            ui.selected_relations = selected_relations
             
             with log_output:
                 print("Finalizado com sucesso. Veja o dashboard interativo abaixo.")
@@ -536,7 +602,7 @@ def create_advanced_expert_dashboard(
 
     run_btn.on_click(on_run_pipeline)
 
-    params_tab = widgets.VBox([html_title_params, params_controls])
+    params_tab = widgets.VBox([html_title_params, params_controls, relations_controls])
     expert_tab = widgets.VBox([html_title_expert, rule_controls])
     run_tab = widgets.VBox([html_title_run, run_btn, widgets.HTML("<br>"), log_output])
     results_tab = widgets.VBox([dash_output])
@@ -550,6 +616,10 @@ def create_advanced_expert_dashboard(
     ui.quick_mode_control = quick_mode_cb
     ui.bootstrap_control = n_bootstrap_ui
     ui.parallel_jobs_control = parallel_jobs_ui
+    ui.relation_selection_control = relations_select
+    ui.select_all_relations_button = select_all_relations_btn
+    ui.clear_relations_button = clear_relations_btn
+    ui.selected_relations = list(relations_select.value)
     ui.expert_source_control = source_dd
     ui.expert_target_control = target_dd
     ui.expert_lag_control = lag_input
@@ -562,6 +632,7 @@ def create_advanced_expert_dashboard(
     quick_mode_cb.observe(_invalidate_result, names="value")
     n_bootstrap_ui.observe(_invalidate_result, names="value")
     parallel_jobs_ui.observe(_invalidate_result, names="value")
+    relations_select.observe(_invalidate_result, names="value")
 
     display(ui)
     return ui
