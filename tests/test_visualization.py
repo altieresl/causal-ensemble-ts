@@ -29,6 +29,29 @@ class AdvancedDashboardTests(unittest.TestCase):
 
         self.assertGreater(len(coordinates), 2)
 
+    def test_probabilistic_graph_shows_negative_sign_consensus(self):
+        summary = pd.DataFrame(
+            [
+                {
+                    "source": "humidity",
+                    "target": "wind_speed",
+                    "lag": 0,
+                    "edge_probability": 0.8,
+                    "confidence": 0.7,
+                    "positive_votes": 0,
+                    "negative_votes": 3,
+                    "sign_consensus": "negative",
+                    "sign_agreement": 1.0,
+                }
+            ]
+        )
+
+        fig = plot_probabilistic_causal_graph(summary)
+
+        self.assertIn("sign=negative", fig.data[0].text)
+        self.assertIn("negative_votes=3", fig.data[0].text)
+        self.assertTrue(fig.data[0].line.color.startswith("rgba(211, 47, 47"))
+
     @patch("causal_discovery.visualization._require_plotly")
     def test_plot_temporal_dag_returns_figure_for_empty_summary(self, mock_require_plotly):
         class FakeFigure:

@@ -47,6 +47,44 @@ class EnsembleSummaryTests(unittest.TestCase):
         self.assertEqual(summary.loc[0, "method"], ["M1"])
         self.assertAlmostEqual(summary.loc[0, "mean_score"], 2.0)
 
+    def test_sign_consensus_ignores_structural_presence_scores(self):
+        result = pd.DataFrame(
+            [
+                {"source": "x", "target": "y", "lag": 1, "score": -0.2, "method": "PCMCI"},
+                {"source": "x", "target": "y", "lag": 1, "score": -0.5, "method": "VARLiNGAM"},
+                {"source": "x", "target": "y", "lag": 1, "score": 1.0, "method": "GES"},
+                {"source": "x", "target": "y", "lag": 1, "score": 1.0, "method": "FCI"},
+            ]
+        )
+
+        summary = summarize_probabilistic_ensemble(
+            [result],
+            min_votes=1,
+            method_names=["PCMCI", "VARLiNGAM", "GES", "FCI"],
+        )
+
+        self.assertEqual(summary.loc[0, "positive_votes"], 0)
+        self.assertEqual(summary.loc[0, "negative_votes"], 2)
+        self.assertEqual(summary.loc[0, "sign_consensus"], "negative")
+        self.assertEqual(summary.loc[0, "sign_agreement"], 1.0)
+        self.assertEqual(summary.loc[0, "signed_methods"], ["PCMCI", "VARLiNGAM"])
+
+    def test_sign_consensus_reports_mixed_signed_evidence(self):
+        result = pd.DataFrame(
+            [
+                {"source": "x", "target": "y", "lag": 1, "score": -0.2, "method": "PCMCI"},
+                {"source": "x", "target": "y", "lag": 1, "score": 0.5, "method": "DYNOTEARS"},
+                {"source": "x", "target": "y", "lag": 1, "score": 0.3, "method": "VARLiNGAM"},
+            ]
+        )
+
+        summary = summarize_ensemble([result], min_votes=1)
+
+        self.assertEqual(summary.loc[0, "positive_votes"], 2)
+        self.assertEqual(summary.loc[0, "negative_votes"], 1)
+        self.assertEqual(summary.loc[0, "sign_consensus"], "mixed")
+        self.assertAlmostEqual(summary.loc[0, "sign_agreement"], 2 / 3)
+
     def test_empty_methods_are_counted_in_support_denominator(self):
         result = pd.DataFrame(
             [{"source": "x", "target": "y", "lag": 1, "score": 1.0, "p_value": 0.01, "method": "M1"}]
@@ -94,6 +132,7 @@ class EnsembleSummaryTests(unittest.TestCase):
         self.assertTrue(summary.empty)
         self.assertIn("edge_probability", summary.columns)
         self.assertIn("support_ratio", summary.columns)
+        self.assertIn("sign_consensus", summary.columns)
 
     def test_score_fallback_does_not_cancel_opposite_effect_signs(self):
         negative = pd.DataFrame(

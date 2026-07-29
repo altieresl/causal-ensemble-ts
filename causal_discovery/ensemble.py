@@ -14,7 +14,35 @@ from .probabilistic import (
 )
 
 
-ENSEMBLE_COLUMNS = ["source", "target", "lag", "method", "votes", "mean_score"]
+SIGNED_SCORE_METHODS = frozenset(
+    {
+        "PCMCI",
+        "LPCMCI",
+        "ClassicalGranger",
+        "HeterogeneousTemporalGranger",
+        "ScoreBasedBIC",
+        "VARLiNGAM",
+        "DYNOTEARS",
+    }
+)
+
+SIGN_COLUMNS = [
+    "signed_methods",
+    "positive_votes",
+    "negative_votes",
+    "sign_consensus",
+    "sign_agreement",
+]
+
+ENSEMBLE_COLUMNS = [
+    "source",
+    "target",
+    "lag",
+    "method",
+    "votes",
+    "mean_score",
+    *SIGN_COLUMNS,
+]
 
 PROBABILISTIC_COLUMNS = [
     "source",
@@ -28,6 +56,7 @@ PROBABILISTIC_COLUMNS = [
     "support_ci_low",
     "support_ci_high",
     "mean_score",
+    *SIGN_COLUMNS,
     "combined_p_value",
     "bayes_factor_10",
     "posterior_probability",
@@ -126,6 +155,62 @@ def _deduplicate_method_edges(ensemble: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def _summarize_score_signs(group: pd.DataFrame) -> dict[str, object]:
+    methods = group.get("method", pd.Series(dtype=object)).astype(str)
+    scores = pd.to_numeric(
+        group.get("score", pd.Series(index=group.index, dtype=float)),
+        errors="coerce",
+    )
+    signed = group.loc[methods.isin(SIGNED_SCORE_METHODS)].copy()
+    signed["_signed_score"] = scores.loc[signed.index]
+    directional = signed.loc[
+        np.isfinite(signed["_signed_score"]) & signed["_signed_score"].ne(0.0)
+    ]
+
+    positive_votes = int(directional["_signed_score"].gt(0.0).sum())
+    negative_votes = int(directional["_signed_score"].lt(0.0).sum())
+    sign_votes = positive_votes + negative_votes
+
+    if positive_votes and negative_votes:
+        sign_consensus = "mixed"
+    elif positive_votes:
+        sign_consensus = "positive"
+    elif negative_votes:
+        sign_consensus = "negative"
+    else:
+        sign_consensus = "unknown"
+
+    sign_agreement = (
+        max(positive_votes, negative_votes) / sign_votes
+        if sign_votes
+        else float("nan")
+    )
+    return {
+        "signed_methods": sorted(set(directional["method"].astype(str))),
+        "positive_votes": positive_votes,
+        "negative_votes": negative_votes,
+        "sign_consensus": sign_consensus,
+        "sign_agreement": float(sign_agreement),
+    }
+
+
+def _summarize_signs_by_edge(ensemble: pd.DataFrame) -> pd.DataFrame:
+    rows: list[dict[str, object]] = []
+    for (source, target, lag), group in ensemble.groupby(
+        ["source", "target", "lag"],
+        dropna=False,
+    ):
+        rows.append(
+            {
+                "source": source,
+                "target": target,
+                "lag": lag,
+                **_summarize_score_signs(group),
+            }
+        )
+    return pd.DataFrame(rows, columns=["source", "target", "lag", *SIGN_COLUMNS])
+
+
 def summarize_ensemble(
     results: list[pd.DataFrame],
     min_votes: int = 2,
@@ -135,6 +220,10 @@ def summarize_ensemble(
         return _empty_ensemble_frame()
 
     ensemble = _deduplicate_method_edges(pd.concat(non_empty, ignore_index=True))
+    if ensemble.empty:
+        return _empty_ensemble_frame()
+
+    sign_summary = _summarize_signs_by_edge(ensemble)
     summary = (
         ensemble.groupby(["source", "target", "lag"], as_index=False)
         .agg(
@@ -142,6 +231,7 @@ def summarize_ensemble(
             votes=("method", "nunique"),
             mean_score=("score", "mean"),
         )
+        .merge(sign_summary, on=["source", "target", "lag"], how="left")
         .sort_values(["votes", "mean_score"], ascending=[False, False])
     )
     return summary[summary["votes"] >= min_votes].reset_index(drop=True)
@@ -162,6 +252,9 @@ def summarize_probabilistic_ensemble(
         return _empty_probabilistic_frame()
 
     ensemble = _deduplicate_method_edges(pd.concat(non_empty, ignore_index=True))
+    if ensemble.empty:
+        return _empty_probabilistic_frame()
+
     method_weights = method_weights or {}
     all_method_names = _normalize_method_names(
         ensemble,
@@ -213,6 +306,7 @@ def summarize_probabilistic_ensemble(
         )
 
         mean_score = float(pd.to_numeric(group.get("score", pd.Series(dtype=float)), errors="coerce").mean())
+        sign_summary = _summarize_score_signs(group)
 
         if "p_value" in group.columns:
             combined_p_value = combine_p_values_fisher(group["p_value"])
@@ -262,6 +356,7 @@ def summarize_probabilistic_ensemble(
                 "support_ci_low": float(support_ci_low),
                 "support_ci_high": float(support_ci_high),
                 "mean_score": mean_score,
+                **sign_summary,
                 "combined_p_value": float(combined_p_value),
                 "bayes_factor_10": float(bayes_factor_10) if np.isfinite(bayes_factor_10) else np.nan,
                 "posterior_probability": float(posterior_probability),

@@ -7,6 +7,34 @@ import numpy as np
 import pandas as pd
 
 
+_SIGN_COLORS = {
+    "positive": (30, 136, 229),
+    "negative": (211, 47, 47),
+    "mixed": (245, 124, 0),
+    "unknown": (96, 125, 139),
+}
+
+
+def _edge_sign_visuals(edge: pd.Series) -> tuple[str, str, tuple[int, int, int]]:
+    consensus = str(edge.get("sign_consensus", "unknown"))
+    if consensus not in _SIGN_COLORS:
+        consensus = "unknown"
+
+    positive_value = pd.to_numeric(edge.get("positive_votes", 0), errors="coerce")
+    negative_value = pd.to_numeric(edge.get("negative_votes", 0), errors="coerce")
+    positive_votes = int(positive_value) if pd.notna(positive_value) else 0
+    negative_votes = int(negative_value) if pd.notna(negative_value) else 0
+    agreement_value = pd.to_numeric(edge.get("sign_agreement", np.nan), errors="coerce")
+    agreement_text = f"{float(agreement_value):.1%}" if pd.notna(agreement_value) else "n/a"
+    text = (
+        f"sign={consensus}<br>"
+        f"positive_votes={positive_votes}<br>"
+        f"negative_votes={negative_votes}<br>"
+        f"sign_agreement={agreement_text}"
+    )
+    return consensus, text, _SIGN_COLORS[consensus]
+
+
 def _self_loop_coordinates(
     x: float,
     y: float,
@@ -143,7 +171,9 @@ def plot_probabilistic_causal_graph(
         confidence = float(edge.get("confidence", 0.0)) if pd.notna(edge.get("confidence", np.nan)) else 0.0
         lag = int(edge.get("lag", 0))
         width = 1.0 + 5.0 * probability
-        color = f"rgba(30, 136, 229, {0.2 + 0.8 * confidence})"
+        _, sign_text, sign_color = _edge_sign_visuals(edge)
+        red, green, blue = sign_color
+        color = f"rgba({red}, {green}, {blue}, {0.2 + 0.8 * confidence})"
         if source_name == target_name:
             edge_x, edge_y = _self_loop_coordinates(x0, y0)
             arrow_x, arrow_y = edge_x[-1], edge_y[-1]
@@ -164,7 +194,8 @@ def plot_probabilistic_causal_graph(
                     f"{source_name} -> {target_name}<br>"
                     f"lag={lag}<br>"
                     f"prob={probability:.3f}<br>"
-                    f"conf={confidence:.3f}"
+                    f"conf={confidence:.3f}<br>"
+                    f"{sign_text}"
                 ),
                 showlegend=False,
             )
@@ -711,7 +742,12 @@ def plot_temporal_dag(
         confidence_value = edge.get("confidence", np.nan)
         confidence = float(confidence_value) if pd.notna(confidence_value) else 0.0
         width = 1.5 + 5.5 * probability
-        color = f"rgba(0, 121, 107, {0.25 + 0.75 * max(confidence, probability)})"
+        _, sign_text, sign_color = _edge_sign_visuals(edge)
+        red, green, blue = sign_color
+        color = (
+            f"rgba({red}, {green}, {blue}, "
+            f"{0.25 + 0.75 * max(confidence, probability)})"
+        )
 
         x0 = x_positions[lag]
         x1 = x_positions[0]
@@ -736,7 +772,8 @@ def plot_temporal_dag(
                 text=(
                     f"{source_name}(t-{lag}) -> {target_name}(t)<br>"
                     f"prob={probability:.3f}<br>"
-                    f"conf={confidence:.3f}"
+                    f"conf={confidence:.3f}<br>"
+                    f"{sign_text}"
                 ),
                 showlegend=False,
             )
