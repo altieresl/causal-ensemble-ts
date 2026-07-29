@@ -420,6 +420,36 @@ def create_advanced_expert_dashboard(
         parallel_jobs_ui
     ])
 
+    objective_select = widgets.Dropdown(
+        options=[
+            ("Explorar estrutura geral", "full_structure"),
+            ("Investigar causas de uma variavel", "causes_of_target"),
+            ("Investigar efeitos de uma variavel", "effects_of_source"),
+            ("Comparar as duas direcoes", "compare_directions"),
+            ("Escolher relacoes especificas", "specific_relations"),
+        ],
+        value="full_structure",
+        description="Objetivo:",
+        style={"description_width": "initial"},
+        layout=widgets.Layout(width="500px"),
+    )
+    primary_variable = widgets.Dropdown(
+        options=all_nodes,
+        value=all_nodes[0],
+        description="Variavel principal:",
+        style={"description_width": "initial"},
+        layout=widgets.Layout(width="500px"),
+    )
+    secondary_default = all_nodes[1] if len(all_nodes) > 1 else all_nodes[0]
+    secondary_variable = widgets.Dropdown(
+        options=all_nodes,
+        value=secondary_default,
+        description="Segunda variavel:",
+        style={"description_width": "initial"},
+        layout=widgets.Layout(width="500px"),
+    )
+    objective_help = widgets.HTML("")
+
     relation_options = [
         (f"{source} \u2192 {target}", (source, target))
         for source in all_nodes
@@ -443,6 +473,54 @@ def create_advanced_expert_dashboard(
     )
     relation_status = widgets.HTML("")
 
+    def objective_configuration() -> dict[str, object]:
+        return {
+            "type": objective_select.value,
+            "primary_variable": primary_variable.value,
+            "secondary_variable": (
+                secondary_variable.value
+                if objective_select.value == "compare_directions"
+                else None
+            ),
+        }
+
+    def apply_objective_selection(*_args: object):
+        objective = objective_select.value
+        primary = primary_variable.value
+        secondary = secondary_variable.value
+
+        primary_variable.layout.display = (
+            "" if objective in {"causes_of_target", "effects_of_source", "compare_directions"} else "none"
+        )
+        secondary_variable.layout.display = "" if objective == "compare_directions" else "none"
+
+        if objective == "full_structure":
+            selected = [value for _, value in relation_options]
+            description = "Todas as relacoes entre variaveis diferentes serao avaliadas."
+        elif objective == "causes_of_target":
+            selected = [(source, primary) for source in all_nodes if source != primary]
+            description = f"Investiga quais variaveis podem anteceder ou influenciar {primary}."
+        elif objective == "effects_of_source":
+            selected = [(primary, target) for target in all_nodes if target != primary]
+            description = f"Investiga quais variaveis podem ser influenciadas por {primary}."
+        elif objective == "compare_directions":
+            selected = (
+                [(primary, secondary), (secondary, primary)]
+                if primary != secondary
+                else []
+            )
+            description = f"Compara {primary} \u2192 {secondary} e {secondary} \u2192 {primary}."
+        else:
+            selected = list(relations_select.value)
+            description = "Escolha manualmente os pares direcionais na lista abaixo."
+
+        if objective != "specific_relations":
+            relations_select.value = tuple(selected)
+        objective_help.value = (
+            f"<p>{description}</p>"
+            f"<p><b>{len(selected)}</b> relacao(oes) definida(s) pelo objetivo atual.</p>"
+        )
+
     def update_relation_status():
         relation_status.value = (
             f"<b>{len(relations_select.value)}</b> de "
@@ -458,12 +536,24 @@ def create_advanced_expert_dashboard(
     select_all_relations_btn.on_click(on_select_all_relations)
     clear_relations_btn.on_click(on_clear_relations)
     relations_select.observe(lambda change: update_relation_status(), names="value")
+    objective_select.observe(apply_objective_selection, names="value")
+    primary_variable.observe(apply_objective_selection, names="value")
+    secondary_variable.observe(apply_objective_selection, names="value")
+    apply_objective_selection()
     update_relation_status()
 
     relations_controls = widgets.VBox([
         widgets.HTML(
-            "<h3>Relacoes analisadas</h3>"
-            "<p>Selecione pares direcionais. Autorelacoes nao sao oferecidas.</p>"
+            "<h3>Objetivo da analise</h3>"
+            "<p>As opcoes abaixo sao geradas a partir das colunas do dataset atual.</p>"
+        ),
+        objective_select,
+        primary_variable,
+        secondary_variable,
+        objective_help,
+        widgets.HTML(
+            "<h4>Relacoes analisadas</h4>"
+            "<p>Voce pode refinar a selecao sugerida. Autorelacoes nao sao oferecidas.</p>"
         ),
         relations_select,
         widgets.HBox([select_all_relations_btn, clear_relations_btn]),
@@ -583,6 +673,7 @@ def create_advanced_expert_dashboard(
             selected_relations = list(relations_select.value)
             if not selected_relations:
                 raise ValueError("Selecione pelo menos uma relacao para analisar.")
+            analysis_objective = objective_configuration()
 
             callback_kwargs = {
                 "quick_mode": quick_mode_cb.value,
@@ -601,6 +692,8 @@ def create_advanced_expert_dashboard(
             )
             if "selected_relations" in callback_parameters or accepts_extra_kwargs:
                 callback_kwargs["selected_relations"] = selected_relations
+            if "analysis_objective" in callback_parameters or accepts_extra_kwargs:
+                callback_kwargs["analysis_objective"] = analysis_objective
 
             callback_result = pipeline_callback(
                 **callback_kwargs
@@ -615,6 +708,7 @@ def create_advanced_expert_dashboard(
             ui.consistency_matrix = consistency
             ui.current_rules = current_rules
             ui.selected_relations = selected_relations
+            ui.analysis_objective = analysis_objective
             
             with log_output:
                 print("Finalizado com sucesso. Veja o dashboard interativo abaixo.")
@@ -647,6 +741,10 @@ def create_advanced_expert_dashboard(
     ui.quick_mode_control = quick_mode_cb
     ui.bootstrap_control = n_bootstrap_ui
     ui.parallel_jobs_control = parallel_jobs_ui
+    ui.analysis_objective_control = objective_select
+    ui.objective_primary_control = primary_variable
+    ui.objective_secondary_control = secondary_variable
+    ui.analysis_objective = objective_configuration()
     ui.relation_selection_control = relations_select
     ui.select_all_relations_button = select_all_relations_btn
     ui.clear_relations_button = clear_relations_btn
@@ -663,6 +761,9 @@ def create_advanced_expert_dashboard(
     quick_mode_cb.observe(_invalidate_result, names="value")
     n_bootstrap_ui.observe(_invalidate_result, names="value")
     parallel_jobs_ui.observe(_invalidate_result, names="value")
+    objective_select.observe(_invalidate_result, names="value")
+    primary_variable.observe(_invalidate_result, names="value")
+    secondary_variable.observe(_invalidate_result, names="value")
     relations_select.observe(_invalidate_result, names="value")
 
     display(ui)

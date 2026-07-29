@@ -100,6 +100,7 @@ class AdvancedDashboardTests(unittest.TestCase):
             set(dashboard.relation_selection_control.value),
             {("x", "y"), ("y", "x")},
         )
+        self.assertEqual(dashboard.analysis_objective_control.value, "full_structure")
 
     @patch("causal_discovery.visualization.create_interactive_ensemble_dashboard")
     @patch("IPython.display.display")
@@ -129,6 +130,46 @@ class AdvancedDashboardTests(unittest.TestCase):
 
         self.assertEqual(received["selected_relations"], [("x", "y")])
         self.assertEqual(dashboard.selected_relations, [("x", "y")])
+        self.assertEqual(received["analysis_objective"]["type"], "full_structure")
+
+    @patch("IPython.display.display")
+    def test_dashboard_builds_objectives_from_current_dataset_columns(self, _display):
+        dashboard = create_advanced_expert_dashboard(
+            processed_data=pd.DataFrame(
+                {
+                    "temperature": [1, 2],
+                    "humidity": [2, 3],
+                    "wind": [3, 4],
+                }
+            ),
+            candidate_methods={"A": lambda data: pd.DataFrame()},
+            candidate_method_kwargs={"A": {}},
+            method_weights={"A": 1.0},
+            all_nodes=["temperature", "humidity", "wind"],
+            pipeline_callback=lambda **kwargs: (pd.DataFrame(), pd.DataFrame()),
+        )
+
+        dashboard.analysis_objective_control.value = "causes_of_target"
+        dashboard.objective_primary_control.value = "wind"
+        self.assertEqual(
+            set(dashboard.relation_selection_control.value),
+            {("temperature", "wind"), ("humidity", "wind")},
+        )
+
+        dashboard.analysis_objective_control.value = "effects_of_source"
+        dashboard.objective_primary_control.value = "humidity"
+        self.assertEqual(
+            set(dashboard.relation_selection_control.value),
+            {("humidity", "temperature"), ("humidity", "wind")},
+        )
+
+        dashboard.analysis_objective_control.value = "compare_directions"
+        dashboard.objective_primary_control.value = "temperature"
+        dashboard.objective_secondary_control.value = "wind"
+        self.assertEqual(
+            set(dashboard.relation_selection_control.value),
+            {("temperature", "wind"), ("wind", "temperature")},
+        )
 
     @patch("IPython.display.display")
     def test_dashboard_accepts_rule_with_same_source_and_target(self, _display):
