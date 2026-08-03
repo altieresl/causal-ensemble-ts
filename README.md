@@ -91,6 +91,11 @@ da busca:
 Quick é apropriado para exploração. A execução completa cobre mais combinações e mais
 reamostragens, mas ainda não elimina as limitações dos dados observacionais.
 
+Por enquanto, todos os métodos possuem peso `1.0`. Essa escolha neutra evita introduzir
+uma preferência sem calibração experimental: cada método que apoia uma aresta contribui
+igualmente para `weighted_support_ratio`. Pesos diferentes só devem ser adotados depois de
+uma validação reproduzível em múltiplos cenários, sementes e regimes de ruído.
+
 ## Objetivos e relações dinâmicas
 
 A interface gera suas opções a partir das colunas de `processed_data`. Ao trocar o
