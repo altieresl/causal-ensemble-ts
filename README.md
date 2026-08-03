@@ -1,62 +1,130 @@
 # causal-ensemble-ts
 
-Framework em Python para descoberta causal em series temporais usando ensemble de
-metodos, resumo probabilistico, conhecimento especialista e visualizacao interativa.
+Framework em Python para descoberta causal em séries temporais usando múltiplos
+algoritmos, seleção robusta de ensemble, resumo probabilístico, conhecimento
+especialista e visualização interativa.
 
-## Visao geral
+## Visão geral
 
-O projeto combina resultados de diferentes algoritmos de descoberta causal em uma
-representacao comum de arestas temporais:
+O projeto representa uma relação temporal pelo contrato:
 
 ```text
-source -> target em um lag especifico
+source(t-lag) -> target(t)
 ```
 
-O objetivo e apoiar investigacao causal com mais robustez do que um metodo isolado,
-mantendo a incerteza visivel e permitindo que conhecimento de dominio seja aplicado de
-forma explicita.
+Os resultados devem ser interpretados como evidências e hipóteses causais sob as
+premissas de cada método, e não como prova definitiva de causalidade em dados
+observacionais.
 
-## Fluxo principal
+## Pipeline atual
 
-1. Carregue os dados.
-2. Aplique `CausalPreprocessor` para preparar as series.
-3. Execute metodos candidatos, como PCMCI, LPCMCI, VARLiNGAM, DYNOTEARS ou score-based.
-4. Combine resultados com `summarize_probabilistic_ensemble` ou
-   `select_robust_ensemble_combination`.
-5. Aplique regras especialistas com `expert_knowledge`, quando necessario.
-6. Analise o grafo, a tabela de arestas e a consistencia entre metodos no dashboard.
+O notebook `Series_Temporais.ipynb` usa somente a pipeline robusta. O antigo fluxo de
+ensemble simples não é executado.
 
-## Uso basico
+Os oito algoritmos candidatos são:
 
-```python
-from causal_discovery import summarize_probabilistic_ensemble
+- PCMCI;
+- LPCMCI;
+- Classical Granger;
+- Neural Granger cMLP;
+- VAR-LiNGAM;
+- DYNOTEARS;
+- GES;
+- FCI.
 
-summary = summarize_probabilistic_ensemble(
-    all_results,
-    min_votes=2,
-    method_weights=method_weights,
-)
+Todos são executados na amostra original e nos bootstraps. A pipeline reutiliza essas
+saídas para avaliar subconjuntos de métodos sem repetir os ajustes pesados para cada
+combinação.
 
-summary.head()
+Fluxo principal:
+
+1. carregar e pré-processar as séries;
+2. configurar os oito métodos;
+3. definir o objetivo e as relações de interesse;
+4. executar os métodos e filtrar suas saídas para as relações selecionadas;
+5. avaliar combinações de métodos com ensemble probabilístico e bootstrap em blocos;
+6. escolher a combinação com melhor desempenho agregado;
+7. apresentar probabilidades, sinais, estabilidade, consistência e regras especialistas.
+
+## Como as combinações são definidas
+
+Uma combinação é um subconjunto sem repetição dos oito métodos candidatos. A ordem não
+importa: `PCMCI + GES` é a mesma combinação que `GES + PCMCI`.
+
+| Execução | Métodos disponíveis | Combinações | Bootstraps padrão | Execuções pré-calculadas |
+| --- | ---: | ---: | ---: | ---: |
+| Quick | 8 | 28 pares | 4 | `8 x (4 + 1) = 40` |
+| Completa | 8 | 28 pares + 56 trios = 84 | 8 | `8 x (8 + 1) = 72` |
+
+Na pipeline principal, `min_votes=2`. Portanto, uma aresta precisa do apoio dos dois
+métodos em uma combinação de dois, ou de pelo menos dois dos três métodos em uma
+combinação de três.
+
+Cada combinação recebe o seguinte escore:
+
+```text
+performance_score =
+    0.35 * mean_stability
+  + 0.25 * mean_confidence
+  + 0.25 * mean_edge_probability
+  + 0.15 * mean_method_agreement
 ```
 
-## Dashboard interativo
+O ranking é ordenado por `performance_score`, depois por estabilidade e confiança. O
+resumo causal final vem da melhor combinação, não necessariamente dos oito métodos ao
+mesmo tempo. Assim, “usar todos os algoritmos” significa que todos são executados e
+participam da seleção como candidatos.
 
-```python
-from causal_discovery import create_advanced_expert_dashboard
+O pré-cálculo evita executar novamente os métodos para cada um dos 28 ou 84 subconjuntos.
+O limite de tempo do bootstrap pode interromper novas reamostragens, de modo que a
+quantidade efetiva pode ser menor em máquinas mais lentas.
 
-dashboard = create_advanced_expert_dashboard(
-    processed_data=processed_data,
-    candidate_methods=candidate_methods,
-    candidate_method_kwargs=candidate_method_kwargs,
-    method_weights=method_weights,
-    all_nodes=list(processed_data.columns),
-    pipeline_callback=pipeline_runner,
-)
-```
+## Quick e execução completa
 
-O dashboard permite ajustar parametros, cadastrar regras especialistas, rodar o pipeline e
-visualizar resultados filtraveis.
+Os dois modos usam os mesmos oito algoritmos e os mesmos pesos. A diferença está no custo
+da busca:
+
+- Quick avalia apenas pares, usa 4 bootstraps por padrão e limite de 240 segundos para o
+  pré-cálculo dos bootstraps;
+- Completo avalia pares e trios, usa 8 bootstraps por padrão e limite de 900 segundos.
+
+Quick é apropriado para exploração. A execução completa cobre mais combinações e mais
+reamostragens, mas ainda não elimina as limitações dos dados observacionais.
+
+## Objetivos e relações dinâmicas
+
+A interface gera suas opções a partir das colunas de `processed_data`. Ao trocar o
+dataset e reexecutar as células de preparação, configuração e interface, as novas
+variáveis passam a aparecer automaticamente.
+
+Objetivos disponíveis:
+
+- explorar toda a estrutura entre variáveis diferentes;
+- investigar as possíveis causas de uma variável;
+- investigar os possíveis efeitos de uma variável;
+- comparar as duas direções entre duas variáveis;
+- selecionar relações direcionais específicas.
+
+Autorrelações (`source == target`) não são oferecidas e não são guardadas no resultado
+final. A seleção controla quais arestas permanecem nas saídas usadas pelo ensemble. Os
+algoritmos ainda recebem o dataset completo, então restringir relações reduz o escopo da
+análise, mas não garante redução proporcional do tempo de ajuste.
+
+## Interface e execução padrão
+
+O botão da interface chama `pipeline_runner`. Depois da execução, o resultado fica
+armazenado no próprio objeto do dashboard e a célula seguinte o reutiliza.
+
+Se o notebook for executado com “Run All” sem clicar no botão, a célula de resultados
+aciona automaticamente uma execução padrão com:
+
+- modo completo (`quick_mode=False`);
+- todas as relações entre variáveis diferentes;
+- nenhuma regra especialista;
+- todos os oito métodos.
+
+Isso evita que regras apenas preenchidas na interface afetem uma execução que não foi
+explicitamente iniciada pelo usuário.
 
 ## Conhecimento especialista
 
@@ -74,38 +142,59 @@ expert_knowledge = [
 ]
 ```
 
-Relacoes aceitas:
+Relações aceitas:
 
-- `strong`: reforca a existencia esperada da aresta.
-- `weak`: reduz a expectativa da aresta.
-- `inverse`: marca efeito esperado negativo.
+- `strong`: reforça a existência esperada da aresta;
+- `weak`: reduz a expectativa da aresta;
+- `inverse`: registra efeito esperado negativo;
 - `none`: reduz ou veta a aresta.
 
-Restricoes aceitas:
+Restrições `soft` combinam evidência e prior. Uma regra `none + hard` remove a aresta do
+resumo filtrado.
 
-- `soft`: mistura evidencia empirica e conhecimento especialista.
-- `hard`: aplica uma restricao forte; `none + hard` remove a aresta do resumo filtrado.
+## Saída e interpretação dos escores
 
-## Principais colunas de saida
+Os métodos retornam as colunas canônicas:
 
-- `edge_probability`: probabilidade estimada da aresta.
-- `posterior_probability`: probabilidade posterior aproximada.
-- `data_edge_probability`: probabilidade do ensemble antes das regras especialistas.
-- `expert_adjusted_probability`: probabilidade final depois das regras especialistas, quando fornecidas.
-- `combined_p_value`: p-value agregado quando disponivel.
-- `support_ratio`: fracao de metodos que apoiam a aresta.
-- `support_ci_low` / `support_ci_high`: intervalo de Wilson para suporte.
-- `uncertainty`: `1 - edge_probability`.
-- `expert_adjustment`: regras especialistas aplicadas.
-- `expert_effect`: efeito esperado quando informado pelo especialista.
+```text
+source, target, lag, score, p_value, method
+```
 
-## Referencias
+O significado de `score` depende do algoritmo. Em métodos cujo escore é um coeficiente
+com sinal, um valor negativo pode sugerir que o aumento da origem está associado à
+redução do alvo, condicionado ao modelo e ao lag. Em GES e FCI, por exemplo, o valor pode
+funcionar apenas como marcador estrutural. Por isso, escores brutos de métodos diferentes
+não devem ser comparados diretamente.
 
-- Runge et al. (2019), _Detecting and quantifying causal associations in large nonlinear time series datasets_.
-- Runge (2018), _Causal network reconstruction from time series_.
-- Fisher (1932), _Statistical Methods for Research Workers_.
-- Benjamini and Hochberg (1995), _Controlling the False Discovery Rate_.
-- Kass and Raftery (1995), _Bayes Factors_.
-- Sellke, Bayarri and Berger (2001), _Calibration of p Values for Testing Precise Null Hypotheses_.
-- Pearl (2009), _Causality: Models, Reasoning, and Inference_.
-- Spirtes, Glymour and Scheines (2000), _Causation, Prediction, and Search_.
+No resumo robusto, use principalmente:
+
+- `edge_probability`: evidência estimada de existência da aresta;
+- `positive_votes` e `negative_votes`: suporte por direção do efeito;
+- `sign_consensus` e `sign_agreement`: consenso e concordância sobre o sinal;
+- `confidence` e `uncertainty`: confiança e incerteza estimadas;
+- estabilidade por bootstrap e métodos que apoiaram a relação.
+
+Uma aresta negativa forte continua sendo evidência de existência. O sinal não deve
+cancelar automaticamente a probabilidade da aresta.
+
+## Benchmark e robustez ao ruído
+
+O benchmark auxiliar usa os mesmos oito candidatos, combinações de pares e trios,
+`min_votes=1`, 2 bootstraps e no máximo 200 iterações para o Neural Granger. Essa
+configuração mais leve serve para validação auxiliar e não é igual à execução principal.
+
+As autorrelações são removidas do `ground_truth` antes do cálculo de precision, recall,
+F1-score e Structural Hamming Distance (SHD). O resumo previsto do benchmark não recebe o
+filtro da interface; portanto, uma autorrelação prevista pode ser contabilizada como falso
+positivo contra esse gabarito filtrado. No teste de ruído severo, uma redução de F1 e um
+aumento de SHD indicam degradação da recuperação estrutural.
+
+## Referências
+
+- Runge et al. (2019), *Detecting and quantifying causal associations in large nonlinear time series datasets*.
+- Runge (2018), *Causal network reconstruction from time series*.
+- Granger (1969), *Investigating Causal Relations by Econometric Models and Cross-spectral Methods*.
+- Tank et al. (2021), *Neural Granger Causality*.
+- Pamfil et al. (2020), *DYNOTEARS*.
+- Pearl (2009), *Causality: Models, Reasoning, and Inference*.
+- Spirtes, Glymour and Scheines (2000), *Causation, Prediction, and Search*.
