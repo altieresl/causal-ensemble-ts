@@ -46,6 +46,32 @@ Fluxo principal:
 6. escolher a combinação com melhor desempenho agregado;
 7. apresentar probabilidades, sinais, estabilidade, consistência e regras especialistas.
 
+## Entrada de dados: CSV e CausalTime
+
+O notebook centraliza a origem em `DATASET_PROFILES` e alterna o perfil por
+`ACTIVE_DATASET`. O carregador público `load_time_series_dataset` aceita:
+
+- CSV, com coluna temporal opcional e seleção automática das colunas numéricas;
+- CausalTime em `gen_data.npy`, acompanhado por `graph.npy`.
+
+`selected_columns=None` usa dinamicamente todas as variáveis disponíveis. Uma lista
+explícita usa somente os nomes informados e é validada contra `available_columns`. A
+interface continua derivando seus nós de `processed_data.columns`, portanto passa a
+refletir automaticamente o subconjunto carregado.
+
+No CausalTime, nomes ausentes no pacote são gerados como `traffic_00`, `traffic_01` etc.
+Os primeiros `N` canais são as variáveis observadas, onde `N` é a dimensão de
+`graph.npy`; os canais restantes são auxiliares do gerador e não entram na análise. O
+objeto carregado também expõe `ground_truth`, `metadata` e `trajectory_frame(i)`.
+
+As trajetórias do CausalTime são independentes. O notebook escolhe uma delas por
+`trajectory_index` e não concatena silenciosamente as 480 trajetórias, pois isso criaria
+transições temporais inexistentes entre o final de uma trajetória e o início da próxima.
+O perfil atual usa seis nós conectados e `max_lag=2` como teste de integração. Essa
+seleção orientada pelo grafo é adequada para depuração, mas não deve ser apresentada como
+avaliação cega do benchmark. O grafo de tráfego baixado é simétrico e não contém lags;
+logo, sua avaliação estrutural exige uma métrica sem correspondência exata de lag.
+
 ## Como as combinações são definidas
 
 Uma combinação é um subconjunto sem repetição dos oito métodos candidatos. A ordem não

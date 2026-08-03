@@ -1,4 +1,9 @@
-from .datasets import create_synthetic_dataset, load_daily_delhi_climate
+from .datasets import (
+    TimeSeriesDataset,
+    create_synthetic_dataset,
+    load_daily_delhi_climate,
+    load_time_series_dataset,
+)
 from .ensemble import run_method_suite, summarize_ensemble, summarize_probabilistic_ensemble
 from .ensemble_selection import (
     compute_method_consistency,
@@ -23,6 +28,7 @@ from .visualization import (
 
 __all__ = [
     "CausalPreprocessor",
+    "TimeSeriesDataset",
     "apply_expert_knowledge_to_summary",
     "create_interactive_ensemble_dashboard",
     "create_synthetic_dataset",
@@ -32,6 +38,7 @@ __all__ = [
     "extract_method_weights",
     "filter_probabilistic_edges",
     "load_daily_delhi_climate",
+    "load_time_series_dataset",
     "normalize_expert_knowledge",
     "plot_method_consistency_heatmap",
     "plot_probabilistic_causal_graph",
