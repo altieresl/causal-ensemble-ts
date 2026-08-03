@@ -184,15 +184,22 @@ cancelar automaticamente a probabilidade da aresta.
 
 ## Benchmark e robustez ao ruído
 
-O benchmark auxiliar usa os mesmos oito candidatos, combinações de pares e trios,
-`min_votes=1`, 2 bootstraps e no máximo 200 iterações para o Neural Granger. Essa
-configuração mais leve serve para validação auxiliar e não é igual à execução principal.
+O benchmark auxiliar usa os mesmos oito candidatos, mas avalia somente os 56 trios
+possíveis, exige consenso de pelo menos 2 dos 3 métodos, executa 20 bootstraps e adota
+`selection_probability_threshold=0.6`. O `max_lag` é 2 e o Neural Granger permanece
+limitado a 200 iterações para controlar o custo.
 
-As autorrelações são removidas do `ground_truth` antes do cálculo de precision, recall,
-F1-score e Structural Hamming Distance (SHD). O resumo previsto do benchmark não recebe o
-filtro da interface; portanto, uma autorrelação prevista pode ser contabilizada como falso
-positivo contra esse gabarito filtrado. No teste de ruído severo, uma redução de F1 e um
-aumento de SHD indicam degradação da recuperação estrutural.
+Essa restrição a trios é exclusiva do benchmark. A pipeline principal permanece com 28
+pares no Quick e 28 pares mais 56 trios no modo Completo.
+
+Essa política evita que um par muito esparso seja favorecido apenas por concordar sobre
+poucas arestas. O consenso de 2 entre 3 preserva controle de falsos positivos enquanto
+permite que um método deixe de detectar uma relação mais fraca.
+
+As autorrelações são removidas tanto do `ground_truth` quanto do resumo previsto antes do
+cálculo de precision, recall, F1-score e Structural Hamming Distance (SHD). No teste de
+ruído severo, uma redução de F1 e um aumento de SHD indicam degradação da recuperação
+estrutural.
 
 ## Referências
 
@@ -201,5 +208,6 @@ aumento de SHD indicam degradação da recuperação estrutural.
 - Granger (1969), *Investigating Causal Relations by Econometric Models and Cross-spectral Methods*.
 - Tank et al. (2021), *Neural Granger Causality*.
 - Pamfil et al. (2020), *DYNOTEARS*.
+- Meinshausen and Bühlmann (2010), *Stability Selection*.
 - Pearl (2009), *Causality: Models, Reasoning, and Inference*.
 - Spirtes, Glymour and Scheines (2000), *Causation, Prediction, and Search*.
