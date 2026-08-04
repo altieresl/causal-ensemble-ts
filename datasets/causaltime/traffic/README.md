@@ -88,6 +88,24 @@ data = dataset.data
 ground_truth = dataset.ground_truth
 ```
 
+Depois de executar a pipeline, o esqueleto previsto pode ser comparado ao grafo por:
+
+```python
+from causal_discovery import compute_undirected_skeleton_metrics
+
+metrics = compute_undirected_skeleton_metrics(
+    probabilistic_summary,
+    ground_truth,
+    prob_threshold=0.5,
+    nodes=dataset.selected_columns,
+    evaluated_relations=selected_relations,
+)
+```
+
+A função agrupa direções e lags do mesmo par, remove autorrelações e informa precision,
+recall, F1, SHD, prevalência estrutural e o baseline que prevê todos os pares. Ela valida
+somente adjacências, pois este `graph.npy` não identifica direção ou lag.
+
 Com `selected_columns=None`, todos os 20 nós observados são carregados. Para trabalhar
 com um subconjunto explícito:
 

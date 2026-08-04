@@ -2,6 +2,125 @@ import numpy as np
 import pandas as pd
 
 
+def _undirected_pairs(frame: pd.DataFrame) -> set[tuple[str, str]]:
+    """Converte arestas em pares sem direção, removendo autorrelações."""
+    if frame.empty:
+        return set()
+
+    required_columns = {"source", "target"}
+    missing_columns = required_columns - set(frame.columns)
+    if missing_columns:
+        raise ValueError(
+            "A tabela de arestas não possui as colunas obrigatórias: "
+            f"{sorted(missing_columns)}"
+        )
+
+    return {
+        tuple(sorted((str(source), str(target))))
+        for source, target in zip(frame["source"], frame["target"])
+        if pd.notna(source) and pd.notna(target) and str(source) != str(target)
+    }
+
+
+def compute_undirected_skeleton_metrics(
+    predicted_summary: pd.DataFrame,
+    ground_truth: pd.DataFrame,
+    prob_threshold: float = 0.5,
+    nodes: list[str] | tuple[str, ...] | None = None,
+    evaluated_relations: list[tuple[str, str]] | None = None,
+) -> dict[str, object]:
+    """Avalia adjacências quando o ground truth não informa direção ou lag.
+
+    Arestas em direções ou lags diferentes são reduzidas ao mesmo par de nós. Quando
+    há mais de uma previsão para o par, basta que uma delas alcance o limiar de
+    ``edge_probability`` para que a adjacência seja considerada prevista. Se
+    ``evaluated_relations`` for informado, a comparação considera somente esses pares.
+    """
+    if not 0.0 <= prob_threshold <= 1.0:
+        raise ValueError("prob_threshold deve estar entre 0 e 1.")
+
+    if predicted_summary.empty:
+        predictions = predicted_summary
+    elif "edge_probability" in predicted_summary.columns:
+        probabilities = pd.to_numeric(
+            predicted_summary["edge_probability"], errors="coerce"
+        )
+        predictions = predicted_summary.loc[probabilities >= prob_threshold]
+    else:
+        predictions = predicted_summary
+
+    predicted_pairs = _undirected_pairs(predictions)
+    true_pairs = _undirected_pairs(ground_truth)
+    evaluated_pairs = (
+        {
+            tuple(sorted((str(source), str(target))))
+            for source, target in evaluated_relations
+            if str(source) != str(target)
+        }
+        if evaluated_relations is not None
+        else None
+    )
+    if evaluated_pairs is not None:
+        predicted_pairs &= evaluated_pairs
+        true_pairs &= evaluated_pairs
+    true_positive_pairs = predicted_pairs & true_pairs
+    false_positive_pairs = predicted_pairs - true_pairs
+    false_negative_pairs = true_pairs - predicted_pairs
+
+    true_positives = len(true_positive_pairs)
+    false_positives = len(false_positive_pairs)
+    false_negatives = len(false_negative_pairs)
+    precision_denominator = true_positives + false_positives
+    recall_denominator = true_positives + false_negatives
+    precision = true_positives / precision_denominator if precision_denominator else 0.0
+    recall = true_positives / recall_denominator if recall_denominator else 0.0
+    f1_score = (
+        2 * precision * recall / (precision + recall)
+        if precision + recall
+        else 0.0
+    )
+
+    if nodes is None:
+        node_set = {
+            node
+            for pair in predicted_pairs | true_pairs
+            for node in pair
+        }
+    else:
+        node_set = {str(node) for node in nodes}
+
+    candidate_pairs = (
+        len(evaluated_pairs)
+        if evaluated_pairs is not None
+        else len(node_set) * (len(node_set) - 1) // 2
+    )
+    ground_truth_prevalence = (
+        len(true_pairs) / candidate_pairs if candidate_pairs else 0.0
+    )
+    all_pairs_baseline_f1 = (
+        2 * ground_truth_prevalence / (1.0 + ground_truth_prevalence)
+        if ground_truth_prevalence
+        else 0.0
+    )
+
+    return {
+        "true_positives": true_positives,
+        "false_positives": false_positives,
+        "false_negatives": false_negatives,
+        "precision": precision,
+        "recall": recall,
+        "f1_score": f1_score,
+        "structural_hamming_distance": false_positives + false_negatives,
+        "candidate_pairs": candidate_pairs,
+        "ground_truth_pairs": len(true_pairs),
+        "ground_truth_prevalence": ground_truth_prevalence,
+        "all_pairs_baseline_f1": all_pairs_baseline_f1,
+        "true_positive_pairs": sorted(true_positive_pairs),
+        "false_positive_pairs": sorted(false_positive_pairs),
+        "false_negative_pairs": sorted(false_negative_pairs),
+    }
+
+
 def generate_synthetic_timeseries(
     n_samples: int = 500,
     noise_std: float = 0.1,

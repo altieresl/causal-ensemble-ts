@@ -4,6 +4,7 @@ import pandas as pd
 
 from causal_discovery.benchmark import (
     compute_structural_metrics,
+    compute_undirected_skeleton_metrics,
     generate_synthetic_timeseries,
     inject_noise_regime_change,
 )
@@ -27,6 +28,71 @@ class BenchmarkTests(unittest.TestCase):
 
         self.assertEqual(metrics["reversed_edges"], 1)
         self.assertEqual(metrics["structural_hamming_distance"], 1)
+
+    def test_undirected_skeleton_ignores_direction_lag_and_duplicates(self):
+        truth = pd.DataFrame(
+            [
+                {"source": "x", "target": "y", "lag": pd.NA},
+                {"source": "y", "target": "x", "lag": pd.NA},
+                {"source": "y", "target": "z", "lag": pd.NA},
+            ]
+        )
+        prediction = pd.DataFrame(
+            [
+                {"source": "y", "target": "x", "lag": 1, "edge_probability": 0.8},
+                {"source": "x", "target": "y", "lag": 2, "edge_probability": 0.7},
+                {"source": "x", "target": "z", "lag": 1, "edge_probability": 0.6},
+            ]
+        )
+
+        metrics = compute_undirected_skeleton_metrics(
+            prediction,
+            truth,
+            prob_threshold=0.5,
+            nodes=["x", "y", "z"],
+        )
+
+        self.assertEqual(metrics["true_positives"], 1)
+        self.assertEqual(metrics["false_positives"], 1)
+        self.assertEqual(metrics["false_negatives"], 1)
+        self.assertEqual(metrics["candidate_pairs"], 3)
+        self.assertAlmostEqual(metrics["ground_truth_prevalence"], 2 / 3)
+        self.assertEqual(metrics["structural_hamming_distance"], 2)
+
+    def test_undirected_skeleton_applies_probability_threshold(self):
+        truth = pd.DataFrame([{"source": "x", "target": "y", "lag": pd.NA}])
+        prediction = pd.DataFrame(
+            [
+                {"source": "x", "target": "y", "lag": 1, "edge_probability": 0.49},
+                {"source": "y", "target": "x", "lag": 2, "edge_probability": 0.51},
+            ]
+        )
+
+        metrics = compute_undirected_skeleton_metrics(prediction, truth)
+
+        self.assertEqual(metrics["true_positives"], 1)
+        self.assertEqual(metrics["false_negatives"], 0)
+
+    def test_undirected_skeleton_respects_evaluated_relations(self):
+        truth = pd.DataFrame(
+            [
+                {"source": "x", "target": "y", "lag": pd.NA},
+                {"source": "y", "target": "z", "lag": pd.NA},
+            ]
+        )
+        prediction = pd.DataFrame(
+            [{"source": "y", "target": "x", "lag": 2, "edge_probability": 0.9}]
+        )
+
+        metrics = compute_undirected_skeleton_metrics(
+            prediction,
+            truth,
+            evaluated_relations=[("x", "y"), ("y", "x")],
+        )
+
+        self.assertEqual(metrics["candidate_pairs"], 1)
+        self.assertEqual(metrics["true_positives"], 1)
+        self.assertEqual(metrics["false_negatives"], 0)
 
     def test_noise_injection_is_reproducible_and_validates_index(self):
         data, _ = generate_synthetic_timeseries(n_samples=30, random_state=5)

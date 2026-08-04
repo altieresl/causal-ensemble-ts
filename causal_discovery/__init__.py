@@ -33,6 +33,8 @@ __all__ = [
     "create_interactive_ensemble_dashboard",
     "create_synthetic_dataset",
     "compute_method_consistency",
+    "compute_structural_metrics",
+    "compute_undirected_skeleton_metrics",
     "create_advanced_expert_dashboard",
     "evaluate_method_combination",
     "extract_method_weights",
@@ -48,7 +50,14 @@ __all__ = [
     "select_robust_ensemble_combination",
     "summarize_ensemble",
     "summarize_probabilistic_ensemble",
+    "generate_synthetic_timeseries",
+    "inject_noise_regime_change",
 ]
 
-from .benchmark import generate_synthetic_timeseries, compute_structural_metrics, inject_noise_regime_change
+from .benchmark import (
+    compute_structural_metrics,
+    compute_undirected_skeleton_metrics,
+    generate_synthetic_timeseries,
+    inject_noise_regime_change,
+)
 

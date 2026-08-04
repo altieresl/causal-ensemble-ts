@@ -70,7 +70,11 @@ transições temporais inexistentes entre o final de uma trajetória e o início
 O perfil atual usa seis nós conectados e `max_lag=2` como teste de integração. Essa
 seleção orientada pelo grafo é adequada para depuração, mas não deve ser apresentada como
 avaliação cega do benchmark. O grafo de tráfego baixado é simétrico e não contém lags;
-logo, sua avaliação estrutural exige uma métrica sem correspondência exata de lag.
+logo, sua avaliação estrutural usa `compute_undirected_skeleton_metrics`, que reduz
+direções e lags ao mesmo par de nós. A célula posterior à pipeline compara precision,
+recall, F1 e SHD com o ground truth, mostra a prevalência de arestas e confronta o F1 do
+ensemble com o baseline que prevê todos os pares. Se a interface restringir as relações,
+somente os pares efetivamente analisados entram no ground truth da comparação.
 
 ## Como as combinações são definidas
 
@@ -209,6 +213,12 @@ Uma aresta negativa forte continua sendo evidência de existência. O sinal não
 cancelar automaticamente a probabilidade da aresta.
 
 ## Benchmark e robustez ao ruído
+
+Quando o dataset ativo fornece apenas uma matriz de adjacência simétrica e sem lag, a
+validação usa o esqueleto não direcionado: previsões do mesmo par em qualquer direção ou
+lag contam como uma única adjacência. Essa avaliação mede recuperação estrutural, mas não
+valida orientação causal ou atraso temporal. Para ground truths direcionados e com lag,
+o benchmark continua usando `compute_structural_metrics`.
 
 O benchmark auxiliar usa os mesmos oito candidatos, mas avalia somente os 56 trios
 possíveis, exige consenso de pelo menos 2 dos 3 métodos, executa 20 bootstraps e adota
