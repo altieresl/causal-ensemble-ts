@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from sklearn.metrics import average_precision_score, roc_auc_score
 
 
 def _undirected_pairs(frame: pd.DataFrame) -> set[tuple[str, str]]:
@@ -118,6 +119,60 @@ def compute_undirected_skeleton_metrics(
         "true_positive_pairs": sorted(true_positive_pairs),
         "false_positive_pairs": sorted(false_positive_pairs),
         "false_negative_pairs": sorted(false_negative_pairs),
+    }
+
+
+def compute_ranked_undirected_skeleton_metrics(
+    pair_scores: pd.DataFrame,
+    ground_truth: pd.DataFrame,
+    *,
+    score_column: str = "score",
+) -> dict[str, float | int]:
+    """Avalia o ranking completo de pares sem depender de limiar binario.
+
+    AUROC mede a ordenacao entre positivos e negativos. Average precision (AP),
+    equivalente a area sob a curva precision-recall em sua definicao por degraus,
+    e mais informativa quando o esqueleto e esparso.
+    """
+    required_columns = {"source", "target", score_column}
+    missing_columns = required_columns - set(pair_scores.columns)
+    if missing_columns:
+        raise ValueError(
+            "A tabela de escores nao possui as colunas obrigatorias: "
+            f"{sorted(missing_columns)}"
+        )
+    if pair_scores.empty:
+        raise ValueError("pair_scores nao pode ser vazio.")
+
+    true_pairs = _undirected_pairs(ground_truth)
+    normalized = pair_scores.copy()
+    normalized["_pair"] = [
+        tuple(sorted((str(source), str(target))))
+        for source, target in zip(normalized["source"], normalized["target"])
+    ]
+    if normalized["_pair"].duplicated().any():
+        raise ValueError("pair_scores deve conter exatamente uma linha por par.")
+    if any(source == target for source, target in normalized["_pair"]):
+        raise ValueError("pair_scores nao deve conter autorrelacoes.")
+
+    scores = pd.to_numeric(normalized[score_column], errors="coerce")
+    if scores.isna().any() or not np.isfinite(scores.to_numpy()).all():
+        raise ValueError(f"{score_column} deve conter apenas numeros finitos.")
+    labels = normalized["_pair"].isin(true_pairs).astype(int).to_numpy()
+    if np.unique(labels).size < 2:
+        raise ValueError(
+            "AUROC/AUPRC exigem ao menos um par positivo e um par negativo."
+        )
+
+    prevalence = float(labels.mean())
+    return {
+        "candidate_pairs": int(len(labels)),
+        "positive_pairs": int(labels.sum()),
+        "negative_pairs": int(len(labels) - labels.sum()),
+        "prevalence": prevalence,
+        "roc_auc": float(roc_auc_score(labels, scores)),
+        "average_precision": float(average_precision_score(labels, scores)),
+        "random_average_precision": prevalence,
     }
 
 

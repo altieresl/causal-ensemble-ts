@@ -124,6 +124,37 @@ As opções apresentadas pela interface são geradas dinamicamente a partir das 
 carregadas. Portanto, trocar `selected_columns` também altera as variáveis disponíveis
 para definição dos objetivos da análise.
 
+## Validação com todas as trajetórias
+
+O projeto preserva as fronteiras das 480 trajetórias e produz um ranking completo de
+pares por:
+
+```python
+from causal_discovery import (
+    compute_ranked_undirected_skeleton_metrics,
+    run_pcmci_multiple_trajectories,
+)
+
+pair_scores = run_pcmci_multiple_trajectories(
+    dataset.observed_trajectories(),
+    dataset.available_columns,
+    max_lag=1,
+    standardize=True,
+)
+ranking_metrics = compute_ranked_undirected_skeleton_metrics(
+    pair_scores,
+    dataset.ground_truth,
+)
+```
+
+O `max_lag=1` é o padrão conservador deste arquivo porque cada trajetória possui somente
+40 passos; ele deve ser tratado como hiperparâmetro e validado novamente em outro
+dataset. Todos os 20 nós observados são usados como contexto mesmo quando o objetivo
+reporta apenas seis. Nesse subgrafo, o teste local produziu AUROC `1,000` e AP `1,000`:
+o único negativo ficou abaixo dos 14 positivos. Isso demonstra separação perfeita do
+ranking nesta execução, mas um limiar escolhido no mesmo ground truth continua sendo
+uma estimativa oráculo e não garante zero FP/FN em dados novos.
+
 ## Carregamento NumPy direto
 
 Para inspecionar os arquivos sem usar o carregador do projeto:
@@ -150,8 +181,12 @@ print(graph.shape)      # (20, 20)
 - O ground truth indica adjacência, mas não o lag causal exato.
 - Escolher nós com base no próprio grafo é útil para depuração, porém não constitui uma
   avaliação cega do benchmark.
+- O artigo do CausalTime avalia rankings por AUROC/AUPRC; otimizar um limiar no próprio
+  ground truth e reportá-lo como teste produz vazamento de informação.
 
 ## Referências
 
 - [CausalTime: Realistically Generated Time-series for Benchmarking of Causal Discovery](https://arxiv.org/html/2310.01753)
+- [Tigramite: suporte oficial a múltiplos datasets](https://jakobrunge.github.io/tigramite/_modules/tigramite/data_processing.html)
+- [Neural Granger Causality](https://arxiv.org/abs/1802.05842)
 - [DCRNN e dados PEMS-BAY](https://github.com/liyaguang/DCRNN)

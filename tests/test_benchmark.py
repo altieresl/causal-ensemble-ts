@@ -3,6 +3,7 @@ import unittest
 import pandas as pd
 
 from causal_discovery.benchmark import (
+    compute_ranked_undirected_skeleton_metrics,
     compute_structural_metrics,
     compute_undirected_skeleton_metrics,
     generate_synthetic_timeseries,
@@ -93,6 +94,42 @@ class BenchmarkTests(unittest.TestCase):
         self.assertEqual(metrics["candidate_pairs"], 1)
         self.assertEqual(metrics["true_positives"], 1)
         self.assertEqual(metrics["false_negatives"], 0)
+
+    def test_ranked_skeleton_metrics_uses_all_positive_and_negative_pairs(self):
+        truth = pd.DataFrame(
+            [{"source": "x", "target": "y", "lag": pd.NA}]
+        )
+        scores = pd.DataFrame(
+            [
+                {"source": "x", "target": "y", "score": 0.9},
+                {"source": "x", "target": "z", "score": 0.2},
+                {"source": "y", "target": "z", "score": 0.1},
+            ]
+        )
+
+        metrics = compute_ranked_undirected_skeleton_metrics(scores, truth)
+
+        self.assertEqual(metrics["candidate_pairs"], 3)
+        self.assertEqual(metrics["positive_pairs"], 1)
+        self.assertEqual(metrics["negative_pairs"], 2)
+        self.assertEqual(metrics["roc_auc"], 1.0)
+        self.assertEqual(metrics["average_precision"], 1.0)
+        self.assertAlmostEqual(metrics["random_average_precision"], 1 / 3)
+
+    def test_ranked_skeleton_metrics_rejects_duplicate_pairs(self):
+        truth = pd.DataFrame(
+            [{"source": "x", "target": "y", "lag": pd.NA}]
+        )
+        scores = pd.DataFrame(
+            [
+                {"source": "x", "target": "y", "score": 0.9},
+                {"source": "y", "target": "x", "score": 0.8},
+                {"source": "x", "target": "z", "score": 0.1},
+            ]
+        )
+
+        with self.assertRaises(ValueError):
+            compute_ranked_undirected_skeleton_metrics(scores, truth)
 
     def test_noise_injection_is_reproducible_and_validates_index(self):
         data, _ = generate_synthetic_timeseries(n_samples=30, random_state=5)

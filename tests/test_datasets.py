@@ -84,6 +84,14 @@ class DatasetTests(unittest.TestCase):
                 loaded.data,
                 loaded.trajectory_frame(1),
             )
+            np.testing.assert_array_equal(
+                loaded.selected_trajectories(),
+                generated[:, :, [0, 1]],
+            )
+            np.testing.assert_array_equal(
+                loaded.observed_trajectories(),
+                generated[:, :, :3],
+            )
 
 
 if __name__ == "__main__":

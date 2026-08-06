@@ -54,6 +54,23 @@ class TimeSeriesDataset:
             index=pd.RangeIndex(values.shape[0], name="time"),
         )
 
+    def selected_trajectories(self) -> np.ndarray:
+        """Retorna todas as trajetorias restritas as colunas selecionadas."""
+        if self.trajectories is None:
+            return self.data.to_numpy(dtype=float, copy=True)[None, :, :]
+
+        selected_indices = [
+            self.available_columns.index(column)
+            for column in self.selected_columns
+        ]
+        return np.asarray(self.trajectories[:, :, selected_indices]).copy()
+
+    def observed_trajectories(self) -> np.ndarray:
+        """Retorna todos os nos observados para uso como contexto de ajuste."""
+        if self.trajectories is None:
+            return self.data.to_numpy(dtype=float, copy=True)[None, :, :]
+        return np.asarray(self.trajectories).copy()
+
 
 def _normalize_selected_columns(
     available_columns: Sequence[str],

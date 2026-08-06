@@ -64,9 +64,13 @@ Os primeiros `N` canais são as variáveis observadas, onde `N` é a dimensão d
 `graph.npy`; os canais restantes são auxiliares do gerador e não entram na análise. O
 objeto carregado também expõe `ground_truth`, `metadata` e `trajectory_frame(i)`.
 
-As trajetórias do CausalTime são independentes. O notebook escolhe uma delas por
-`trajectory_index` e não concatena silenciosamente as 480 trajetórias, pois isso criaria
-transições temporais inexistentes entre o final de uma trajetória e o início da próxima.
+As trajetórias do CausalTime são independentes. A descoberta principal escolhe uma delas
+por `trajectory_index`. A validação complementar usa `observed_trajectories()` e
+`run_pcmci_multiple_trajectories` para analisar todas como datasets separados, sem criar
+transições temporais entre o final de uma trajetória e o início da próxima. Cada
+variável é padronizada dentro de sua própria trajetória para que diferenças de escala
+entre amostras não dominem a dependência temporal. Todos os nós observados entram como
+contexto do ajuste; as relações escolhidas na interface são filtradas somente depois.
 O perfil atual usa seis nós conectados e `max_lag=2` como teste de integração. Essa
 seleção orientada pelo grafo é adequada para depuração, mas não deve ser apresentada como
 avaliação cega do benchmark. O grafo de tráfego baixado é simétrico e não contém lags;
@@ -75,6 +79,14 @@ direções e lags ao mesmo par de nós. A célula posterior à pipeline compara 
 recall, F1 e SHD com o ground truth, mostra a prevalência de arestas e confronta o F1 do
 ensemble com o baseline que prevê todos os pares. Se a interface restringir as relações,
 somente os pares efetivamente analisados entram no ground truth da comparação.
+
+O CausalTime original reporta AUROC e AUPRC sobre escores de aresta. Por isso, a mesma
+célula calcula também `compute_ranked_undirected_skeleton_metrics` sobre a tabela completa
+de pares do PCMCI multi-trajetória. Essa avaliação não depende do limiar binário de 0,5.
+No subgrafo atual, a execução reproduzível obteve AUROC `1,000` e average precision
+`1,000`; como existem 14 positivos em 15 pares, o baseline aleatório de AP já é `0,933`.
+Isso é evidência complementar de ranking, não garantia de zero falsos positivos ou
+falsos negativos. O ground truth nunca altera as arestas produzidas pelo ensemble.
 
 ## Como as combinações são definidas
 

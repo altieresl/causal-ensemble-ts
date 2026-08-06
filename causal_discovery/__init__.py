@@ -17,6 +17,7 @@ from .expert_knowledge import (
     normalize_expert_knowledge,
 )
 from .preprocessing import CausalPreprocessor
+from .panel import run_pcmci_multiple_trajectories, standardize_trajectories
 from .visualization import (
     create_advanced_expert_dashboard,
     create_interactive_ensemble_dashboard,
@@ -35,6 +36,7 @@ __all__ = [
     "compute_method_consistency",
     "compute_structural_metrics",
     "compute_undirected_skeleton_metrics",
+    "compute_ranked_undirected_skeleton_metrics",
     "create_advanced_expert_dashboard",
     "evaluate_method_combination",
     "extract_method_weights",
@@ -47,14 +49,17 @@ __all__ = [
     "plot_temporal_dag",
     "run_bootstrap_stability_selection",
     "run_method_suite",
+    "run_pcmci_multiple_trajectories",
     "select_robust_ensemble_combination",
     "summarize_ensemble",
     "summarize_probabilistic_ensemble",
+    "standardize_trajectories",
     "generate_synthetic_timeseries",
     "inject_noise_regime_change",
 ]
 
 from .benchmark import (
+    compute_ranked_undirected_skeleton_metrics,
     compute_structural_metrics,
     compute_undirected_skeleton_metrics,
     generate_synthetic_timeseries,
