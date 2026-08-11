@@ -9,6 +9,7 @@ from torch import nn
 from sklearn.inspection import permutation_importance
 from sklearn.neural_network import MLPRegressor
 
+from ..registry import causal_method
 from ..types import canonical_links_to_dataframe
 from ..utils import build_target_dataset, parse_lagged_name, validate_numeric_dataframe
 
@@ -301,6 +302,18 @@ def run_mlp_temporal_importance(
     return canonical_links_to_dataframe(records)
 
 
+@causal_method(
+    name="NeuralGrangercMLP",
+    default_kwargs={
+        "hidden_layer_sizes": (32,),
+        "lambda_group": 0.5,
+        "lambda_ridge": 0.01,
+        "learning_rate": 0.005,
+        "max_iter": 400,
+        "check_every": 100,
+        "patience": 5,
+    },
+)
 def run_neural_granger(
     data: pd.DataFrame,
     max_lag: int,

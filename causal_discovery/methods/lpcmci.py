@@ -6,6 +6,7 @@ import tigramite.data_processing as pp
 from tigramite.independence_tests.parcorr import ParCorr
 from tigramite.lpcmci import LPCMCI
 
+from ..registry import causal_method
 from ..types import canonical_links_to_dataframe
 from ..utils import validate_numeric_dataframe
 
@@ -15,6 +16,7 @@ def _is_definite_forward_edge(edge: object) -> bool:
     return str(edge).strip() == "-->"
 
 
+@causal_method(name="LPCMCI", signed_score=True)
 def run_lpcmci(
     data: pd.DataFrame,
     max_lag: int,

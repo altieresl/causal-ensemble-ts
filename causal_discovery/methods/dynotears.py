@@ -7,6 +7,7 @@ import pandas as pd
 import scipy.linalg as slin
 import scipy.optimize as sopt
 
+from ..registry import causal_method
 from ..types import canonical_links_to_dataframe
 from ..utils import validate_numeric_dataframe
 
@@ -96,6 +97,11 @@ def _objective_and_gradient(
     return float(objective), gradient
 
 
+@causal_method(
+    name="DYNOTEARS",
+    signed_score=True,
+    default_kwargs={"max_iter": 50},
+)
 def run_dynotears(
     data: pd.DataFrame,
     max_lag: int,

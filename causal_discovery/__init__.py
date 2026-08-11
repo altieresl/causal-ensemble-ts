@@ -17,6 +17,15 @@ from .expert_knowledge import (
     normalize_expert_knowledge,
 )
 from .preprocessing import CausalPreprocessor
+from .registry import (
+    CausalMethodSpec,
+    causal_method,
+    discover_causal_methods,
+    get_registered_method_kwargs,
+    get_registered_method_weights,
+    get_registered_methods,
+)
+from .types import MethodOutputValidationError, validate_method_output
 from .panel import run_pcmci_multiple_trajectories, standardize_trajectories
 from .visualization import (
     create_advanced_expert_dashboard,
@@ -29,10 +38,13 @@ from .visualization import (
 
 __all__ = [
     "CausalPreprocessor",
+    "CausalMethodSpec",
+    "MethodOutputValidationError",
     "TimeSeriesDataset",
     "apply_expert_knowledge_to_summary",
     "create_interactive_ensemble_dashboard",
     "create_synthetic_dataset",
+    "causal_method",
     "compute_method_consistency",
     "compute_structural_metrics",
     "compute_undirected_skeleton_metrics",
@@ -40,9 +52,13 @@ __all__ = [
     "create_advanced_expert_dashboard",
     "evaluate_method_combination",
     "extract_method_weights",
+    "discover_causal_methods",
     "filter_probabilistic_edges",
     "load_daily_delhi_climate",
     "load_time_series_dataset",
+    "get_registered_method_kwargs",
+    "get_registered_method_weights",
+    "get_registered_methods",
     "normalize_expert_knowledge",
     "plot_method_consistency_heatmap",
     "plot_probabilistic_causal_graph",
@@ -54,6 +70,7 @@ __all__ = [
     "summarize_ensemble",
     "summarize_probabilistic_ensemble",
     "standardize_trajectories",
+    "validate_method_output",
     "generate_synthetic_timeseries",
     "inject_noise_regime_change",
 ]

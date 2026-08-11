@@ -9,6 +9,7 @@ from collections.abc import Iterable
 import numpy as np
 import pandas as pd
 
+from ..registry import causal_method
 from ..types import canonical_links_to_dataframe
 from ..utils import (
     build_temporal_design_matrix,
@@ -80,6 +81,10 @@ def _iter_temporal_edges(graph) -> Iterable[tuple[object, tuple]]:
             yield edge, temporal
 
 
+@causal_method(
+    name="GES",
+    default_kwargs={"max_parents": 6, "penalty_discount": 0.5},
+)
 def run_score_based_ges(
     data: pd.DataFrame,
     max_lag: int,
@@ -163,6 +168,7 @@ def run_score_based_ges(
     return canonical_links_to_dataframe(records)
 
 
+@causal_method(name="FCI")
 def run_fci(
     data: pd.DataFrame,
     max_lag: int,

@@ -6,10 +6,12 @@ import numpy as np
 import pandas as pd
 import lingam
 
+from ..registry import causal_method
 from ..types import canonical_links_to_dataframe
 from ..utils import validate_numeric_dataframe
 
 
+@causal_method(name="VARLiNGAM", signed_score=True)
 def run_var_lingam(
     data: pd.DataFrame,
     max_lag: int,

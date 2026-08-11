@@ -40,7 +40,11 @@ def _run_method_suite_fast(
         }
         for future in as_completed(futures):
             name = futures[future]
-            outputs[name] = _label_method_output(name, future.result())
+            outputs[name] = _label_method_output(
+                name,
+                future.result(),
+                data_columns=data.columns,
+            )
 
     return outputs
 

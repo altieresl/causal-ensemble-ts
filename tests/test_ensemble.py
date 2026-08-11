@@ -3,6 +3,7 @@ import unittest
 
 import pandas as pd
 
+from causal_discovery import MethodOutputValidationError, validate_method_output
 from causal_discovery.ensemble import (
     run_method_suite,
     summarize_ensemble,
@@ -166,7 +167,10 @@ class EnsembleSummaryTests(unittest.TestCase):
                 ]
             )
 
-        outputs = run_method_suite(pd.DataFrame({"x": [1]}), {"Alias": internally_named})
+        outputs = run_method_suite(
+            pd.DataFrame({"x": [1], "y": [2]}),
+            {"Alias": internally_named},
+        )
         summary = summarize_probabilistic_ensemble(
             list(outputs.values()),
             min_votes=1,
@@ -176,6 +180,93 @@ class EnsembleSummaryTests(unittest.TestCase):
 
         self.assertEqual(summary.loc[0, "method"], ["Alias"])
         self.assertAlmostEqual(summary.loc[0, "weighted_support_ratio"], 1.0)
+
+    def test_method_suite_rejects_non_dataframe_output(self):
+        def invalid_method(_data):
+            return []
+
+        with self.assertRaisesRegex(MethodOutputValidationError, "esperado pandas.DataFrame"):
+            run_method_suite(pd.DataFrame({"x": [1]}), {"Invalid": invalid_method})
+
+    def test_method_suite_rejects_missing_canonical_columns(self):
+        def invalid_method(_data):
+            return pd.DataFrame([{"source": "x", "target": "y", "lag": 1}])
+
+        with self.assertRaisesRegex(MethodOutputValidationError, "colunas canonicas ausentes"):
+            run_method_suite(
+                pd.DataFrame({"x": [1], "y": [2]}),
+                {"Invalid": invalid_method},
+            )
+
+    def test_method_suite_rejects_invalid_edge_values(self):
+        def invalid_method(_data):
+            return pd.DataFrame(
+                [{
+                    "source": "x",
+                    "target": "unknown",
+                    "lag": 1.5,
+                    "score": float("inf"),
+                    "p_value": 2.0,
+                    "method": "Invalid",
+                }]
+            )
+
+        with self.assertRaisesRegex(MethodOutputValidationError, "source/target desconhecidos"):
+            run_method_suite(pd.DataFrame({"x": [1]}), {"Invalid": invalid_method})
+
+    def test_output_validator_rejects_invalid_lag_score_and_p_value(self):
+        valid_row = {
+            "source": "x",
+            "target": "y",
+            "lag": 1,
+            "score": 0.5,
+            "p_value": 0.05,
+            "method": "Test",
+        }
+        invalid_cases = [
+            ({"lag": -1}, "lag"),
+            ({"lag": 1.5}, "lag"),
+            ({"score": float("nan")}, "score"),
+            ({"score": float("inf")}, "score"),
+            ({"p_value": -0.1}, "p_value"),
+            ({"p_value": 1.1}, "p_value"),
+        ]
+
+        for changes, expected_message in invalid_cases:
+            with self.subTest(changes=changes):
+                row = {**valid_row, **changes}
+                with self.assertRaisesRegex(
+                    MethodOutputValidationError,
+                    expected_message,
+                ):
+                    validate_method_output(
+                        pd.DataFrame([row]),
+                        method_name="Test",
+                        data_columns=["x", "y"],
+                    )
+
+    def test_method_suite_accepts_missing_p_values(self):
+        def valid_method(_data):
+            return pd.DataFrame(
+                [{
+                    "source": "x",
+                    "target": "y",
+                    "lag": 1.0,
+                    "score": "0.5",
+                    "p_value": None,
+                    "method": "Internal",
+                }]
+            )
+
+        output = run_method_suite(
+            pd.DataFrame({"x": [1], "y": [2]}),
+            {"Valid": valid_method},
+        )["Valid"]
+
+        self.assertEqual(output.loc[0, "lag"], 1)
+        self.assertEqual(output.loc[0, "score"], 0.5)
+        self.assertTrue(pd.isna(output.loc[0, "p_value"]))
+        self.assertEqual(output.loc[0, "method"], "Valid")
 
 
 if __name__ == "__main__":

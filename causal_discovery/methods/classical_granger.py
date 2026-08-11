@@ -7,10 +7,12 @@ import pandas as pd
 from statsmodels.tsa.ar_model import AutoReg
 from statsmodels.tsa.stattools import grangercausalitytests
 
+from ..registry import causal_method
 from ..types import canonical_links_to_dataframe
 from ..utils import validate_numeric_dataframe
 
 
+@causal_method(name="ClassicalGranger", signed_score=True)
 def run_classical_granger(
     data: pd.DataFrame,
     max_lag: int,

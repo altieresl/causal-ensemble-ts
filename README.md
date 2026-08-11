@@ -36,6 +36,31 @@ Todos são executados na amostra original e nos bootstraps. A pipeline reutiliza
 saídas para avaliar subconjuntos de métodos sem repetir os ajustes pesados para cada
 combinação.
 
+### Adicionando um algoritmo
+
+Os algoritmos são descobertos automaticamente nos módulos de
+`causal_discovery/methods/`. Para adicionar um candidato, basta criar uma função
+decorada que receba `data` e `max_lag`:
+
+```python
+from causal_discovery import causal_method
+from causal_discovery.types import canonical_links_to_dataframe
+
+
+@causal_method()  # run_novo_metodo passa a aparecer como NovoMetodo
+def run_novo_metodo(data, max_lag, *, threshold=0.1):
+    records = []
+    # Ajuste do algoritmo e preenchimento de records.
+    return canonical_links_to_dataframe(records)
+```
+
+O decorador também aceita `name`, `signed_score`, `weight` e `default_kwargs` quando o
+método precisar declarar esses metadados. Não é necessário editar o registro do notebook
+ou o `__init__.py`. A execução valida automaticamente o tipo de retorno, as colunas
+canônicas, nomes de variáveis, lags, scores e p-valores; uma violação produz
+`MethodOutputValidationError` identificando o método e o problema. Depois da inclusão,
+o único registro adicional necessário é atualizar a documentação com o novo algoritmo.
+
 Fluxo principal:
 
 1. carregar e pré-processar as séries;

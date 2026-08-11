@@ -12,6 +12,8 @@ from .probabilistic import (
     score_to_probability,
     wilson_support_interval,
 )
+from .registry import get_signed_score_methods
+from .types import validate_method_output
 
 
 SIGNED_SCORE_METHODS = frozenset(
@@ -79,14 +81,24 @@ def run_method_suite(
         outputs[name] = _label_method_output(
             name,
             method(data, **method_kwargs.get(name, {})),
+            data_columns=data.columns,
         )
 
     return outputs
 
 
-def _label_method_output(name: str, output: pd.DataFrame) -> pd.DataFrame:
+def _label_method_output(
+    name: str,
+    output: object,
+    *,
+    data_columns: object | None = None,
+) -> pd.DataFrame:
     """Alinha a coluna canonica ``method`` ao nome usado no registro do ensemble."""
-    frame = output.copy()
+    frame = validate_method_output(
+        output,
+        method_name=str(name),
+        data_columns=data_columns,
+    )
     frame["method"] = str(name)
     return frame
 
@@ -161,7 +173,8 @@ def _summarize_score_signs(group: pd.DataFrame) -> dict[str, object]:
         group.get("score", pd.Series(index=group.index, dtype=float)),
         errors="coerce",
     )
-    signed = group.loc[methods.isin(SIGNED_SCORE_METHODS)].copy()
+    signed_method_names = SIGNED_SCORE_METHODS | get_signed_score_methods(discover=False)
+    signed = group.loc[methods.isin(signed_method_names)].copy()
     signed["_signed_score"] = scores.loc[signed.index]
     directional = signed.loc[
         np.isfinite(signed["_signed_score"]) & signed["_signed_score"].ne(0.0)
