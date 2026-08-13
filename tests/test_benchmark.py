@@ -3,6 +3,8 @@ import unittest
 import pandas as pd
 
 from causal_discovery.benchmark import (
+    build_complete_undirected_pair_scores,
+    compute_paired_superiority_statistics,
     compute_ranked_undirected_skeleton_metrics,
     compute_structural_metrics,
     compute_undirected_skeleton_metrics,
@@ -130,6 +132,78 @@ class BenchmarkTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             compute_ranked_undirected_skeleton_metrics(scores, truth)
+
+    def test_complete_pair_scores_aggregates_and_fills_missing_pairs(self):
+        predictions = pd.DataFrame(
+            [
+                {"source": "x", "target": "y", "p_value": 0.20},
+                {"source": "y", "target": "x", "p_value": 0.05},
+            ]
+        )
+
+        scores = build_complete_undirected_pair_scores(
+            predictions,
+            ["x", "y", "z"],
+            evidence="one_minus_p_value",
+        )
+
+        self.assertEqual(len(scores), 3)
+        lookup = {
+            (row.source, row.target): row.score
+            for row in scores.itertuples(index=False)
+        }
+        self.assertAlmostEqual(lookup[("x", "y")], 0.95)
+        self.assertEqual(lookup[("x", "z")], 0.0)
+        self.assertEqual(lookup[("y", "z")], 0.0)
+
+    def test_complete_pair_scores_accepts_ensemble_ranking_score(self):
+        predictions = pd.DataFrame(
+            [
+                {"source": "x", "target": "y", "ensemble_score": 0.85},
+                {"source": "x", "target": "z", "ensemble_score": 0.30},
+            ]
+        )
+
+        scores = build_complete_undirected_pair_scores(
+            predictions,
+            ["x", "y", "z"],
+            evidence="ensemble_score",
+        )
+        lookup = {
+            (row.source, row.target): row.score
+            for row in scores.itertuples(index=False)
+        }
+
+        self.assertAlmostEqual(lookup[("x", "y")], 0.85)
+        self.assertAlmostEqual(lookup[("x", "z")], 0.30)
+        self.assertEqual(lookup[("y", "z")], 0.0)
+
+    def test_paired_superiority_orients_lower_metric_as_improvement(self):
+        results = pd.DataFrame(
+            [
+                {"trajectory_index": index, "strategy": "ENSEMBLE", "shd": value}
+                for index, value in enumerate([1.0, 2.0, 1.0, 2.0])
+            ]
+            + [
+                {"trajectory_index": index, "strategy": "PCMCI", "shd": value}
+                for index, value in enumerate([3.0, 3.0, 2.0, 4.0])
+            ]
+        )
+
+        summary = compute_paired_superiority_statistics(
+            results,
+            candidate="ENSEMBLE",
+            baseline="PCMCI",
+            metric="shd",
+            higher_is_better=False,
+            n_bootstrap=500,
+            random_state=7,
+        )
+
+        self.assertEqual(summary["paired_trajectories"], 4)
+        self.assertGreater(summary["mean_improvement"], 0.0)
+        self.assertGreater(summary["confidence_interval_low"], 0.0)
+        self.assertEqual(summary["win_rate"], 1.0)
 
     def test_noise_injection_is_reproducible_and_validates_index(self):
         data, _ = generate_synthetic_timeseries(n_samples=30, random_state=5)

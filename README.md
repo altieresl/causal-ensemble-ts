@@ -123,18 +123,41 @@ importa: `PCMCI + GES` é a mesma combinação que `GES + PCMCI`.
 | Quick | 8 | 28 pares | 4 | `8 x (4 + 1) = 40` |
 | Completa | 8 | 28 pares + 56 trios = 84 | 8 | `8 x (8 + 1) = 72` |
 
-Na pipeline principal, `min_votes=2`. Portanto, uma aresta precisa do apoio dos dois
-métodos em uma combinação de dois, ou de pelo menos dois dos três métodos em uma
-combinação de três.
+Na pipeline principal, `min_votes=1`. Isso não transforma toda aresta isolada em
+resultado: a saída-base é combinada com a frequência da aresta nos bootstraps e com o
+peso adaptativo do método. Assim, uma evidência exclusiva pode sobreviver quando é muito
+repetível, enquanto uma aresta ocasional tende a ficar abaixo do limiar final.
+
+Os pesos adaptativos são estimados sem consultar o ground truth:
+
+1. a repetibilidade das arestas nos bootstraps aumenta a confiabilidade do método;
+2. grafos mais densos que a mediana recebem uma penalização moderada;
+3. métodos não redundantes recebem um bônus pequeno de diversidade;
+4. os pesos declarados no registro continuam funcionando como prior multiplicativo.
+
+A probabilidade final combina `35%` da evidência da execução-base com `65%` da frequência
+ponderada nos bootstraps. Separadamente, o ranking usa um especialista local por aresta:
+
+```text
+ensemble_score = 0.60 * local_expert_score + 0.40 * consensus_score
+```
+
+O especialista local é o método com maior combinação de força normalizada, estabilidade da
+aresta e confiabilidade adaptativa. A confiabilidade global atua como ajuste moderado, sem
+permitir que os métodos ausentes diluam completamente uma evidência local forte.
+`ensemble_score` serve para AP/AUROC sem alterar o limiar binário. Os parâmetros são expostos por
+`select_robust_ensemble_combination`, portanto podem ser alterados em estudos de
+sensibilidade sem mudar a implementação dos algoritmos.
 
 Cada combinação recebe o seguinte escore:
 
 ```text
 performance_score =
-    0.35 * mean_stability
-  + 0.25 * mean_confidence
-  + 0.25 * mean_edge_probability
-  + 0.15 * mean_method_agreement
+    0.40 * mean_stability
+  + 0.20 * mean_confidence
+  + 0.15 * mean_edge_probability
+  + 0.15 * stable_edge_ratio
+  + 0.10 * (1 - sqrt(edge_density))
 ```
 
 O ranking é ordenado por `performance_score`, depois por estabilidade e confiança. O
@@ -158,10 +181,12 @@ da busca:
 Quick é apropriado para exploração. A execução completa cobre mais combinações e mais
 reamostragens, mas ainda não elimina as limitações dos dados observacionais.
 
-Por enquanto, todos os métodos possuem peso `1.0`. Essa escolha neutra evita introduzir
-uma preferência sem calibração experimental: cada método que apoia uma aresta contribui
-igualmente para `weighted_support_ratio`. Pesos diferentes só devem ser adotados depois de
-uma validação reproduzível em múltiplos cenários, sementes e regimes de ruído.
+Todos os métodos continuam partindo do peso registrado `1.0`, mas esse prior é atualizado
+em cada execução por estabilidade, diversidade e densidade. Os diagnósticos ficam em
+`best_evaluation["method_weight_diagnostics"]` e os pesos efetivos em
+`best_evaluation["effective_method_weights"]`. Esse mecanismo reduz a dependência de pesos
+fixos calibrados para um único dataset; ele não garante que o ensemble vencerá todo método
+avulso em todo processo gerador.
 
 ## Objetivos e relações dinâmicas
 
@@ -241,6 +266,13 @@ não devem ser comparados diretamente.
 No resumo robusto, use principalmente:
 
 - `edge_probability`: evidência estimada de existência da aresta;
+- `base_edge_probability`: evidência antes da estabilidade por bootstrap;
+- `bootstrap_probability`: frequência ponderada entre métodos e reamostragens;
+- `ensemble_score`: score contínuo recomendado para AP, AUROC e ordenação de pares;
+- `local_expert_score`: melhor evidência local ajustada para a aresta;
+- `consensus_score`: média ponderada das evidências dos métodos;
+- `dominant_method`: método que forneceu a maior evidência local;
+- `dominant_edge_stability`: frequência da aresta nos bootstraps desse método;
 - `positive_votes` e `negative_votes`: suporte por direção do efeito;
 - `sign_consensus` e `sign_agreement`: consenso e concordância sobre o sinal;
 - `confidence` e `uncertainty`: confiança e incerteza estimadas;

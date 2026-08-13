@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from scipy.stats import wilcoxon
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 
@@ -173,6 +174,206 @@ def compute_ranked_undirected_skeleton_metrics(
         "roc_auc": float(roc_auc_score(labels, scores)),
         "average_precision": float(average_precision_score(labels, scores)),
         "random_average_precision": prevalence,
+    }
+
+
+def build_complete_undirected_pair_scores(
+    predictions: pd.DataFrame,
+    nodes: list[str] | tuple[str, ...],
+    *,
+    evidence: str,
+    default_score: float = 0.0,
+) -> pd.DataFrame:
+    """Reduz arestas direcionadas a um ranking completo de pares de nos.
+
+    ``evidence`` aceita ``probability`` (maior ``edge_probability``),
+    ``ensemble_score`` (ranking normalizado do ensemble),
+    ``one_minus_p_value`` (maior ``1 - p_value``) ou ``absolute_score``
+    (maior magnitude de ``score``). Pares ausentes recebem ``default_score``.
+    """
+    node_names = tuple(str(node) for node in nodes)
+    if len(node_names) < 2:
+        raise ValueError("nodes deve conter ao menos dois nos.")
+    if len(set(node_names)) != len(node_names):
+        raise ValueError("nodes nao pode conter nomes duplicados.")
+    if not np.isfinite(float(default_score)):
+        raise ValueError("default_score deve ser finito.")
+
+    modes = {
+        "probability": "edge_probability",
+        "ensemble_score": "ensemble_score",
+        "one_minus_p_value": "p_value",
+        "absolute_score": "score",
+    }
+    normalized_evidence = str(evidence).strip().lower()
+    if normalized_evidence not in modes:
+        raise ValueError(
+            "evidence deve ser 'probability', 'ensemble_score', "
+            "'one_minus_p_value' ou 'absolute_score'."
+        )
+
+    required = {"source", "target"}
+    if not predictions.empty:
+        required.add(modes[normalized_evidence])
+    missing = required - set(predictions.columns)
+    if missing:
+        raise ValueError(
+            "A tabela de previsoes nao possui as colunas obrigatorias: "
+            f"{sorted(missing)}"
+        )
+
+    allowed_nodes = set(node_names)
+    pair_scores: dict[tuple[str, str], float] = {}
+    if not predictions.empty:
+        value_column = modes[normalized_evidence]
+        for source, target, raw_value in predictions[
+            ["source", "target", value_column]
+        ].itertuples(index=False, name=None):
+            source_name = str(source)
+            target_name = str(target)
+            if (
+                source_name == target_name
+                or source_name not in allowed_nodes
+                or target_name not in allowed_nodes
+            ):
+                continue
+            try:
+                numeric_value = float(raw_value)
+            except (TypeError, ValueError):
+                continue
+            if not np.isfinite(numeric_value):
+                continue
+            if normalized_evidence == "one_minus_p_value":
+                if not 0.0 <= numeric_value <= 1.0:
+                    continue
+                score = 1.0 - numeric_value
+            elif normalized_evidence == "absolute_score":
+                score = abs(numeric_value)
+            else:
+                score = numeric_value
+
+            pair = tuple(sorted((source_name, target_name)))
+            pair_scores[pair] = max(pair_scores.get(pair, float("-inf")), score)
+
+    records = []
+    for source_index, source in enumerate(node_names):
+        for target in node_names[source_index + 1 :]:
+            pair = tuple(sorted((source, target)))
+            records.append(
+                {
+                    "source": source,
+                    "target": target,
+                    "score": float(pair_scores.get(pair, default_score)),
+                }
+            )
+    return pd.DataFrame(records, columns=["source", "target", "score"])
+
+
+def compute_paired_superiority_statistics(
+    results: pd.DataFrame,
+    *,
+    candidate: str,
+    baseline: str,
+    metric: str,
+    higher_is_better: bool = True,
+    trajectory_column: str = "trajectory_index",
+    strategy_column: str = "strategy",
+    confidence_level: float = 0.95,
+    n_bootstrap: int = 10_000,
+    random_state: int | None = 42,
+) -> dict[str, float | int | str]:
+    """Resume uma comparacao pareada entre duas estrategias.
+
+    Diferencas positivas sempre favorecem ``candidate``. O intervalo usa
+    bootstrap pareado da media e o Wilcoxon e bilateral. Correcoes para
+    comparacoes multiplas devem ser aplicadas pelo chamador.
+    """
+    if not 0.0 < confidence_level < 1.0:
+        raise ValueError("confidence_level deve estar entre 0 e 1.")
+    if n_bootstrap <= 0:
+        raise ValueError("n_bootstrap deve ser maior que zero.")
+
+    required = {trajectory_column, strategy_column, metric}
+    missing = required - set(results.columns)
+    if missing:
+        raise ValueError(
+            "A tabela de resultados nao possui as colunas obrigatorias: "
+            f"{sorted(missing)}"
+        )
+
+    selected = results.loc[
+        results[strategy_column].astype(str).isin([str(candidate), str(baseline)]),
+        [trajectory_column, strategy_column, metric],
+    ].copy()
+    if selected.duplicated([trajectory_column, strategy_column]).any():
+        raise ValueError(
+            "Deve existir no maximo uma observacao por trajetoria e estrategia."
+        )
+    selected[metric] = pd.to_numeric(selected[metric], errors="coerce")
+    paired = selected.pivot(
+        index=trajectory_column,
+        columns=strategy_column,
+        values=metric,
+    )
+    if str(candidate) not in paired.columns or str(baseline) not in paired.columns:
+        raise ValueError("candidate e baseline devem possuir resultados pareados.")
+    paired = paired[[str(candidate), str(baseline)]].dropna()
+    if paired.empty:
+        raise ValueError("Nenhuma trajetoria pareada disponivel para comparacao.")
+
+    candidate_values = paired[str(candidate)].to_numpy(dtype=float)
+    baseline_values = paired[str(baseline)].to_numpy(dtype=float)
+    raw_difference = candidate_values - baseline_values
+    oriented_difference = raw_difference if higher_is_better else -raw_difference
+
+    rng = np.random.default_rng(random_state)
+    sample_indices = rng.integers(
+        0,
+        len(oriented_difference),
+        size=(int(n_bootstrap), len(oriented_difference)),
+    )
+    bootstrap_means = oriented_difference[sample_indices].mean(axis=1)
+    alpha = 1.0 - float(confidence_level)
+    ci_low, ci_high = np.quantile(
+        bootstrap_means,
+        [alpha / 2.0, 1.0 - alpha / 2.0],
+    )
+
+    if np.allclose(oriented_difference, 0.0):
+        wilcoxon_p_value = 1.0
+    else:
+        wilcoxon_p_value = float(
+            wilcoxon(
+                oriented_difference,
+                alternative="two-sided",
+                zero_method="wilcox",
+            ).pvalue
+        )
+
+    standard_deviation = (
+        float(np.std(oriented_difference, ddof=1)) if len(paired) > 1 else 0.0
+    )
+    mean_improvement = float(np.mean(oriented_difference))
+    standardized_effect = (
+        float(mean_improvement / standard_deviation)
+        if standard_deviation > 0.0
+        else (float("inf") if mean_improvement > 0.0 else 0.0)
+    )
+    return {
+        "candidate": str(candidate),
+        "baseline": str(baseline),
+        "metric": str(metric),
+        "paired_trajectories": int(len(paired)),
+        "candidate_mean": float(np.mean(candidate_values)),
+        "baseline_mean": float(np.mean(baseline_values)),
+        "mean_improvement": mean_improvement,
+        "median_improvement": float(np.median(oriented_difference)),
+        "confidence_interval_low": float(ci_low),
+        "confidence_interval_high": float(ci_high),
+        "win_rate": float(np.mean(oriented_difference > 0.0)),
+        "tie_rate": float(np.mean(np.isclose(oriented_difference, 0.0))),
+        "standardized_effect": standardized_effect,
+        "wilcoxon_p_value": wilcoxon_p_value,
     }
 
 

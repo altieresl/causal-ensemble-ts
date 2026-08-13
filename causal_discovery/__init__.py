@@ -7,6 +7,7 @@ from .datasets import (
 from .ensemble import run_method_suite, summarize_ensemble, summarize_probabilistic_ensemble
 from .ensemble_selection import (
     compute_method_consistency,
+    estimate_adaptive_method_weights,
     evaluate_method_combination,
     run_bootstrap_stability_selection,
     select_robust_ensemble_combination,
@@ -42,10 +43,13 @@ __all__ = [
     "MethodOutputValidationError",
     "TimeSeriesDataset",
     "apply_expert_knowledge_to_summary",
+    "build_complete_undirected_pair_scores",
     "create_interactive_ensemble_dashboard",
     "create_synthetic_dataset",
     "causal_method",
     "compute_method_consistency",
+    "estimate_adaptive_method_weights",
+    "compute_paired_superiority_statistics",
     "compute_structural_metrics",
     "compute_undirected_skeleton_metrics",
     "compute_ranked_undirected_skeleton_metrics",
@@ -76,6 +80,8 @@ __all__ = [
 ]
 
 from .benchmark import (
+    build_complete_undirected_pair_scores,
+    compute_paired_superiority_statistics,
     compute_ranked_undirected_skeleton_metrics,
     compute_structural_metrics,
     compute_undirected_skeleton_metrics,
