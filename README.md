@@ -133,7 +133,18 @@ Os pesos adaptativos são estimados sem consultar o ground truth:
 1. a repetibilidade das arestas nos bootstraps aumenta a confiabilidade do método;
 2. grafos mais densos que a mediana recebem uma penalização moderada;
 3. métodos não redundantes recebem um bônus pequeno de diversidade;
-4. os pesos declarados no registro continuam funcionando como prior multiplicativo.
+4. métodos com estruturas muito semelhantes recebem um desconto leve de redundância;
+5. os pesos declarados no registro continuam funcionando como prior multiplicativo.
+
+A redundância média de Jaccard usa penalização moderada `0,20`. Em forma simplificada:
+
+```text
+redundancy_factor = 1 / (1 + 0.20 * redundancy)
+adaptive_weight = previous_weight * redundancy_factor
+```
+
+Esse desconto é uma aproximação simples para evitar dupla contagem de métodos muito dependentes;
+não implementa o modelo bayesiano completo de agregação de especialistas.
 
 A probabilidade final combina `35%` da evidência da execução-base com `65%` da frequência
 ponderada nos bootstraps. Separadamente, o ranking usa um especialista local por aresta:
@@ -145,7 +156,20 @@ ensemble_score = 0.60 * local_expert_score + 0.40 * consensus_score
 O especialista local é o método com maior combinação de força normalizada, estabilidade da
 aresta e confiabilidade adaptativa. A confiabilidade global atua como ajuste moderado, sem
 permitir que os métodos ausentes diluam completamente uma evidência local forte.
-`ensemble_score` serve para AP/AUROC sem alterar o limiar binário. Os parâmetros são expostos por
+Para reduzir falsos positivos fortes de um único especialista, uma validação preditiva opcional
+compara, em cortes temporais expansivos, o erro de um modelo autorregressivo do alvo com o erro
+do mesmo modelo acrescido da fonte na defasagem proposta. O ganho recebe uma posição percentual
+entre as arestas candidatas e atua como um gate conservador:
+
+```text
+ensemble_score_validado =
+    ensemble_score * (0.25 + 0.75 * sqrt(predictive_rank))
+```
+
+O piso de `25%` impede que uma série curta apague completamente a evidência causal. Essa etapa
+não consulta o grafo de referência e não altera `edge_probability`: ela produz evidência
+preditiva auxiliar para o ranking, não prova de causalidade. `ensemble_score` serve para
+AP/AUROC sem alterar o limiar binário. Os parâmetros são expostos por
 `select_robust_ensemble_combination`, portanto podem ser alterados em estudos de
 sensibilidade sem mudar a implementação dos algoritmos.
 
@@ -269,6 +293,9 @@ No resumo robusto, use principalmente:
 - `base_edge_probability`: evidência antes da estabilidade por bootstrap;
 - `bootstrap_probability`: frequência ponderada entre métodos e reamostragens;
 - `ensemble_score`: score contínuo recomendado para AP, AUROC e ordenação de pares;
+- `pre_validation_ensemble_score`: ranking antes do gate preditivo;
+- `predictive_gain`: redução relativa média do erro fora da amostra ao incluir a fonte;
+- `predictive_rank`: posição percentual do ganho preditivo entre as arestas candidatas;
 - `local_expert_score`: melhor evidência local ajustada para a aresta;
 - `consensus_score`: média ponderada das evidências dos métodos;
 - `dominant_method`: método que forneceu a maior evidência local;

@@ -132,6 +132,7 @@ def estimate_adaptive_method_weights(
     diversity_bonus: float = 0.15,
     density_penalty: float = 0.5,
     minimum_weight: float = 0.05,
+    redundancy_penalty: float = 0.0,
 ) -> pd.DataFrame:
     """Estima pesos sem usar o ground truth.
 
@@ -149,6 +150,8 @@ def estimate_adaptive_method_weights(
         "mean_edge_count",
         "relative_density",
         "density_factor",
+        "redundancy",
+        "redundancy_factor",
         "adaptive_weight",
     ]
     if not names:
@@ -158,6 +161,7 @@ def estimate_adaptive_method_weights(
     diversity_bonus = max(float(diversity_bonus), 0.0)
     density_penalty = max(float(density_penalty), 0.0)
     minimum_weight = float(np.clip(minimum_weight, 1e-6, 1.0))
+    redundancy_penalty = max(float(redundancy_penalty), 0.0)
     base_weights = base_weights or {}
     bootstrap_outputs = list(bootstrap_outputs or [])
 
@@ -203,6 +207,11 @@ def estimate_adaptive_method_weights(
             if cross_method_similarities
             else 0.0
         )
+        redundancy = (
+            float(np.mean(cross_method_similarities))
+            if cross_method_similarities
+            else 0.0
+        )
 
         relative_density = mean_edge_counts[name] / reference_count
         density_factor = 1.0 / (
@@ -210,12 +219,6 @@ def estimate_adaptive_method_weights(
         )
         prior_weight = max(float(base_weights.get(name, 1.0)), 0.0)
         reliability = max(bootstrap_stability, minimum_weight) ** stability_power
-        raw_weight = (
-            prior_weight
-            * reliability
-            * (1.0 + diversity_bonus * diversity)
-            * density_factor
-        )
         rows.append(
             {
                 "method": name,
@@ -225,8 +228,18 @@ def estimate_adaptive_method_weights(
                 "mean_edge_count": mean_edge_counts[name],
                 "relative_density": relative_density,
                 "density_factor": density_factor,
-                "adaptive_weight": raw_weight,
+                "redundancy": redundancy,
+                "redundancy_factor": 1.0 / (1.0 + redundancy_penalty * redundancy),
+                "adaptive_weight": prior_weight
+                * reliability
+                * (1.0 + diversity_bonus * diversity)
+                * density_factor,
             }
+        )
+
+    for row in rows:
+        row["adaptive_weight"] = float(row["adaptive_weight"]) * float(
+            row["redundancy_factor"]
         )
 
     weights = np.asarray([float(row["adaptive_weight"]) for row in rows])
@@ -437,6 +450,363 @@ def _add_bootstrap_consensus(
         ["edge_probability", "bootstrap_probability", "votes"],
         ascending=[False, False, False],
     ).reset_index(drop=True)
+
+
+def _ridge_validation_mse(
+    features: np.ndarray,
+    target: np.ndarray,
+    train_indices: np.ndarray,
+    validation_indices: np.ndarray,
+    *,
+    alpha: float,
+) -> float:
+    train_features = features[train_indices]
+    validation_features = features[validation_indices]
+    train_target = target[train_indices]
+    validation_target = target[validation_indices]
+
+    feature_mean = train_features.mean(axis=0)
+    feature_scale = train_features.std(axis=0)
+    feature_scale[feature_scale < 1e-8] = 1.0
+    train_features = (train_features - feature_mean) / feature_scale
+    validation_features = (validation_features - feature_mean) / feature_scale
+
+    target_mean = float(train_target.mean())
+    system = train_features.T @ train_features + alpha * np.eye(train_features.shape[1])
+    coefficients = np.linalg.solve(
+        system,
+        train_features.T @ (train_target - target_mean),
+    )
+    prediction = target_mean + validation_features @ coefficients
+    return float(np.mean((validation_target - prediction) ** 2))
+
+
+def _expanding_validation_splits(
+    sample_count: int,
+    n_splits: int,
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    validation_size = max(3, sample_count // 6)
+    splits: list[tuple[np.ndarray, np.ndarray]] = []
+    for fraction in np.linspace(0.50, 0.80, max(1, int(n_splits))):
+        train_end = max(6, int(sample_count * float(fraction)))
+        validation_end = min(sample_count, train_end + validation_size)
+        if validation_end > train_end:
+            splits.append((np.arange(train_end), np.arange(train_end, validation_end)))
+    return splits
+
+
+def add_predictive_validation_score(
+    summary: pd.DataFrame,
+    data: pd.DataFrame,
+    *,
+    validation_weight: float = 0.75,
+    max_lag: int = 2,
+    n_splits: int = 3,
+    ridge_alpha: float = 1.0,
+    conditional_parents: int = 0,
+    uncertainty_penalty: float = 0.0,
+    rank_exponent: float = 0.5,
+) -> pd.DataFrame:
+    """Penaliza no ranking arestas sem ganho preditivo temporal fora da amostra.
+
+    A validacao compara um modelo autorregressivo do alvo com o mesmo modelo
+    acrescido da fonte na defasagem da aresta. Opcionalmente, os modelos incluem
+    os pais candidatos mais fortes do alvo, aproximando o ganho de uma
+    contribuicao condicional. Os cortes sao expansivos e preservam a ordem
+    temporal. ``uncertainty_penalty`` troca a media pelo limite conservador
+    ``media - penalidade * erro_padrao``. ``rank_exponent`` controla a
+    intensidade do gate sobre a posicao percentual do ganho. O resultado
+    ajusta apenas ``ensemble_score``; ``edge_probability`` e a decisao binaria
+    mantem seus significados.
+
+    Esta medida e evidencia preditiva auxiliar, nao uma prova de causalidade.
+    """
+    frame = summary.copy()
+    if "ensemble_score" not in frame.columns:
+        frame["ensemble_score"] = pd.Series(np.nan, index=frame.index, dtype=float)
+    frame["pre_validation_ensemble_score"] = pd.to_numeric(
+        frame["ensemble_score"], errors="coerce"
+    ).fillna(0.0)
+    frame["predictive_gain"] = 0.0
+    frame["predictive_gain_mean"] = 0.0
+    frame["predictive_gain_std"] = 0.0
+    frame["predictive_gain_standard_error"] = 0.0
+    frame["predictive_positive_split_ratio"] = 0.0
+    frame["predictive_rank"] = 0.0
+
+    if frame.empty or data is None or data.empty:
+        return frame
+
+    validation_weight = float(np.clip(validation_weight, 0.0, 1.0))
+    max_lag = max(1, int(max_lag))
+    n_splits = max(1, int(n_splits))
+    ridge_alpha = max(float(ridge_alpha), 1e-12)
+    conditional_parents = max(0, int(conditional_parents))
+    uncertainty_penalty = max(0.0, float(uncertainty_penalty))
+    rank_exponent = max(float(rank_exponent), 1e-6)
+    numeric_data = data.apply(pd.to_numeric, errors="coerce")
+    if len(numeric_data) - max_lag < 12:
+        return frame
+
+    candidate_score_column = (
+        "pre_validation_ensemble_score"
+        if "pre_validation_ensemble_score" in frame
+        else "ensemble_score"
+    )
+    candidate_rows: dict[str, list[tuple[str, int, float]]] = {}
+    if conditional_parents:
+        for _, candidate in frame.iterrows():
+            source = str(candidate.get("source"))
+            target = str(candidate.get("target"))
+            try:
+                lag = max(0, int(candidate.get("lag")))
+                score = float(candidate.get(candidate_score_column, 0.0))
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if (
+                source in numeric_data
+                and target in numeric_data
+                and source != target
+                and lag <= max_lag
+                and np.isfinite(score)
+            ):
+                candidate_rows.setdefault(target, []).append((source, lag, score))
+        for target in candidate_rows:
+            candidate_rows[target].sort(key=lambda item: item[2], reverse=True)
+
+    gains: list[float] = []
+    mean_gains: list[float] = []
+    gain_stds: list[float] = []
+    gain_standard_errors: list[float] = []
+    positive_split_ratios: list[float] = []
+
+    def append_empty_gain() -> None:
+        gains.append(0.0)
+        mean_gains.append(0.0)
+        gain_stds.append(0.0)
+        gain_standard_errors.append(0.0)
+        positive_split_ratios.append(0.0)
+
+    for _, row in frame.iterrows():
+        source = str(row.get("source"))
+        target = str(row.get("target"))
+        try:
+            edge_lag = max(0, int(row.get("lag")))
+        except (TypeError, ValueError, OverflowError):
+            append_empty_gain()
+            continue
+        if source not in numeric_data or target not in numeric_data or edge_lag > max_lag:
+            append_empty_gain()
+            continue
+
+        target_values = numeric_data[target].to_numpy(dtype=float)
+        source_values = numeric_data[source].to_numpy(dtype=float)
+        target_vector = target_values[max_lag:]
+        autoregressive = np.column_stack(
+            [
+                target_values[max_lag - lag : len(numeric_data) - lag]
+                for lag in range(1, max_lag + 1)
+            ]
+        )
+        source_feature = source_values[
+            max_lag - edge_lag : len(numeric_data) - edge_lag if edge_lag else None
+        ]
+        baseline_features = [autoregressive]
+        seen_parent_features: set[tuple[str, int]] = set()
+        for parent_source, parent_lag, _ in candidate_rows.get(target, []):
+            parent_key = (parent_source, parent_lag)
+            if parent_source == source or parent_key in seen_parent_features:
+                continue
+            parent_values = numeric_data[parent_source].to_numpy(dtype=float)
+            parent_feature = parent_values[
+                max_lag - parent_lag :
+                len(numeric_data) - parent_lag if parent_lag else None
+            ]
+            baseline_features.append(parent_feature.reshape(-1, 1))
+            seen_parent_features.add(parent_key)
+            if len(seen_parent_features) >= conditional_parents:
+                break
+        baseline = np.column_stack(baseline_features)
+        augmented = np.column_stack([baseline, source_feature])
+        if not (
+            np.isfinite(target_vector).all()
+            and np.isfinite(baseline).all()
+            and np.isfinite(augmented).all()
+        ):
+            append_empty_gain()
+            continue
+
+        sample_count = len(target_vector)
+        split_gains: list[float] = []
+        for train_indices, validation_indices in _expanding_validation_splits(
+            sample_count, n_splits
+        ):
+            baseline_mse = _ridge_validation_mse(
+                baseline,
+                target_vector,
+                train_indices,
+                validation_indices,
+                alpha=ridge_alpha,
+            )
+            augmented_mse = _ridge_validation_mse(
+                augmented,
+                target_vector,
+                train_indices,
+                validation_indices,
+                alpha=ridge_alpha,
+            )
+            split_gains.append(
+                (baseline_mse - augmented_mse) / max(baseline_mse, 1e-12)
+            )
+        if not split_gains:
+            append_empty_gain()
+            continue
+        mean_gain = float(np.mean(split_gains))
+        gain_std = float(np.std(split_gains, ddof=1)) if len(split_gains) > 1 else 0.0
+        gain_standard_error = gain_std / math.sqrt(len(split_gains))
+        conservative_gain = mean_gain - uncertainty_penalty * gain_standard_error
+        gains.append(max(0.0, conservative_gain))
+        mean_gains.append(mean_gain)
+        gain_stds.append(gain_std)
+        gain_standard_errors.append(gain_standard_error)
+        positive_split_ratios.append(float(np.mean(np.asarray(split_gains) > 0.0)))
+
+    frame["predictive_gain"] = gains
+    frame["predictive_gain_mean"] = mean_gains
+    frame["predictive_gain_std"] = gain_stds
+    frame["predictive_gain_standard_error"] = gain_standard_errors
+    frame["predictive_positive_split_ratio"] = positive_split_ratios
+    positive = frame["predictive_gain"] > 0.0
+    if positive.any():
+        frame.loc[positive, "predictive_rank"] = frame.loc[
+            positive, "predictive_gain"
+        ].rank(method="average", pct=True)
+
+    # O piso preserva parte de toda evidencia causal. O expoente permite
+    # controlar quanto uma validacao ruidosa em series curtas altera o ranking.
+    predictive_gate = frame["predictive_rank"].clip(0.0, 1.0) ** rank_exponent
+    frame["ensemble_score"] = frame["pre_validation_ensemble_score"] * (
+        (1.0 - validation_weight) + validation_weight * predictive_gate
+    )
+    return frame
+
+
+def add_ranked_structure_selection(
+    summary: pd.DataFrame,
+    *,
+    nodes: Sequence[str] | None = None,
+    max_pair_density: float = 0.5,
+    ranking_column: str = "ensemble_score",
+    selection_column: str = "ensemble_selected",
+    rescue_bootstrap_min: float | None = None,
+    rescue_predictive_rank_min: float | None = None,
+    rescue_support_min: float | None = None,
+) -> pd.DataFrame:
+    """Projeta o ranking do ensemble em uma estrutura binaria esparsa.
+
+    A selecao ocorre no nivel de pares nao direcionados para evitar que varias
+    direcoes ou defasagens do mesmo par consumam o orcamento estrutural. O
+    ``edge_probability`` original e preservado; a decisao fica na coluna
+    booleana ``selection_column``.
+
+    ``max_pair_density`` e um teto, nao uma estimativa da densidade verdadeira.
+    Pares fora do teto podem ser resgatados quando satisfazem simultaneamente
+    limites de estabilidade bootstrap, ganho preditivo e suporte entre metodos.
+    Pares sem evidencia positiva nao sao adicionados apenas para preencher o
+    orcamento.
+    """
+    frame = summary.copy()
+    frame[selection_column] = False
+    frame["ranked_selection_pair_score"] = 0.0
+    frame["ranked_selection_pair_rank"] = pd.Series(
+        pd.NA, index=frame.index, dtype="Int64"
+    )
+    if frame.empty:
+        return frame
+    if not 0.0 <= float(max_pair_density) <= 1.0:
+        raise ValueError("max_pair_density deve estar entre 0 e 1.")
+    if ranking_column not in frame:
+        raise ValueError(f"Coluna de ranking ausente: {ranking_column}")
+
+    observed_nodes = list(dict.fromkeys(str(node) for node in (nodes or [])))
+    if not observed_nodes:
+        observed_nodes = list(
+            dict.fromkeys(
+                [*frame["source"].astype(str), *frame["target"].astype(str)]
+            )
+        )
+    possible_pairs = len(observed_nodes) * max(len(observed_nodes) - 1, 0) // 2
+    pair_budget = int(math.ceil(float(max_pair_density) * possible_pairs))
+    if pair_budget <= 0:
+        return frame
+
+    pair_keys = [
+        tuple(sorted((str(source), str(target))))
+        for source, target in zip(frame["source"], frame["target"])
+    ]
+    scores = pd.to_numeric(frame[ranking_column], errors="coerce").fillna(0.0)
+    pair_table = pd.DataFrame({"pair_key": pair_keys, "pair_score": scores})
+    pair_table = pair_table.loc[
+        [source != target for source, target in pair_table["pair_key"]]
+    ]
+    pair_table = (
+        pair_table.groupby("pair_key", as_index=False)["pair_score"]
+        .max()
+        .loc[lambda current: current["pair_score"] > 0.0]
+        .sort_values(["pair_score", "pair_key"], ascending=[False, True])
+        .reset_index(drop=True)
+    )
+    pair_table["pair_rank"] = np.arange(1, len(pair_table) + 1)
+    selected_pairs = set(pair_table.head(pair_budget)["pair_key"])
+    rescue_thresholds = (
+        rescue_bootstrap_min,
+        rescue_predictive_rank_min,
+        rescue_support_min,
+    )
+    if any(value is not None for value in rescue_thresholds):
+        if not all(value is not None for value in rescue_thresholds):
+            raise ValueError("Os tres limiares de resgate devem ser informados juntos.")
+        required_columns = {
+            "bootstrap_probability",
+            "predictive_rank",
+            "support_ratio",
+        }
+        missing_columns = sorted(required_columns - set(frame.columns))
+        if missing_columns:
+            raise ValueError(
+                "Colunas ausentes para resgate estrutural: "
+                + ", ".join(missing_columns)
+            )
+        rescue_table = pd.DataFrame(
+            {
+                "pair_key": pair_keys,
+                "bootstrap_probability": pd.to_numeric(
+                    frame["bootstrap_probability"], errors="coerce"
+                ).fillna(0.0),
+                "predictive_rank": pd.to_numeric(
+                    frame["predictive_rank"], errors="coerce"
+                ).fillna(0.0),
+                "support_ratio": pd.to_numeric(
+                    frame["support_ratio"], errors="coerce"
+                ).fillna(0.0),
+            }
+        ).groupby("pair_key", as_index=False).max()
+        rescued_pairs = rescue_table.loc[
+            (rescue_table["bootstrap_probability"] >= float(rescue_bootstrap_min))
+            & (rescue_table["predictive_rank"] >= float(rescue_predictive_rank_min))
+            & (rescue_table["support_ratio"] >= float(rescue_support_min)),
+            "pair_key",
+        ]
+        selected_pairs.update(rescued_pairs)
+    score_map = dict(zip(pair_table["pair_key"], pair_table["pair_score"]))
+    rank_map = dict(zip(pair_table["pair_key"], pair_table["pair_rank"]))
+
+    frame[selection_column] = [key in selected_pairs for key in pair_keys]
+    frame["ranked_selection_pair_score"] = [score_map.get(key, 0.0) for key in pair_keys]
+    frame["ranked_selection_pair_rank"] = pd.array(
+        [rank_map.get(key, pd.NA) for key in pair_keys], dtype="Int64"
+    )
+    return frame
 
 
 def _moving_block_bootstrap_indices(n: int, block_size: int, rng: np.random.Generator) -> np.ndarray:
@@ -673,6 +1043,18 @@ def evaluate_method_combination(
     adaptive_method_weights: bool = True,
     stability_weight: float = 0.65,
     local_expert_weight: float = 0.60,
+    predictive_validation_weight: float = 0.0,
+    predictive_validation_max_lag: int | None = None,
+    predictive_validation_splits: int = 3,
+    predictive_validation_ridge_alpha: float = 1.0,
+    predictive_validation_conditional_parents: int = 0,
+    predictive_validation_uncertainty_penalty: float = 0.0,
+    predictive_validation_rank_exponent: float = 0.5,
+    ranked_selection_max_pair_density: float | None = None,
+    ranked_selection_rescue_bootstrap_min: float | None = None,
+    ranked_selection_rescue_predictive_rank_min: float | None = None,
+    ranked_selection_rescue_support_min: float | None = None,
+    method_redundancy_penalty: float = 0.0,
     method_stability_power: float = 1.0,
     method_diversity_bonus: float = 0.15,
     method_density_penalty: float = 0.5,
@@ -726,6 +1108,7 @@ def evaluate_method_combination(
         diversity_bonus=method_diversity_bonus,
         density_penalty=method_density_penalty,
         minimum_weight=minimum_method_weight,
+        redundancy_penalty=method_redundancy_penalty,
     )
     if adaptive_method_weights:
         effective_weights = dict(
@@ -758,11 +1141,44 @@ def evaluate_method_combination(
         stability_weight=stability_weight,
         local_expert_weight=local_expert_weight,
     )
+    if predictive_validation_weight > 0.0:
+        predictive_max_lag = predictive_validation_max_lag
+        if predictive_max_lag is None:
+            observed_lags: list[int] = []
+            for output in outputs.values():
+                if output is None or output.empty or "lag" not in output:
+                    continue
+                numeric_lags = pd.to_numeric(output["lag"], errors="coerce").dropna()
+                if not numeric_lags.empty:
+                    observed_lags.append(int(numeric_lags.max()))
+            predictive_max_lag = max(observed_lags or [1])
+        probabilistic_summary = add_predictive_validation_score(
+            probabilistic_summary,
+            data,
+            validation_weight=predictive_validation_weight,
+            max_lag=predictive_max_lag,
+            n_splits=predictive_validation_splits,
+            ridge_alpha=predictive_validation_ridge_alpha,
+            conditional_parents=predictive_validation_conditional_parents,
+            uncertainty_penalty=predictive_validation_uncertainty_penalty,
+            rank_exponent=predictive_validation_rank_exponent,
+        )
     probabilistic_summary = apply_expert_knowledge_to_summary(
         probabilistic_summary,
         expert_knowledge,
         hard_filter=True,
     )
+    if ranked_selection_max_pair_density is not None:
+        probabilistic_summary = add_ranked_structure_selection(
+            probabilistic_summary,
+            nodes=list(data.columns),
+            max_pair_density=ranked_selection_max_pair_density,
+            rescue_bootstrap_min=ranked_selection_rescue_bootstrap_min,
+            rescue_predictive_rank_min=(
+                ranked_selection_rescue_predictive_rank_min
+            ),
+            rescue_support_min=ranked_selection_rescue_support_min,
+        )
 
     stability = run_bootstrap_stability_selection(
         data,
@@ -788,9 +1204,14 @@ def evaluate_method_combination(
 
     consistency = compute_method_consistency(outputs)
 
-    selected_summary = probabilistic_summary.loc[
-        probabilistic_summary["edge_probability"] >= selection_probability_threshold
-    ].copy()
+    if "ensemble_selected" in probabilistic_summary:
+        selected_summary = probabilistic_summary.loc[
+            probabilistic_summary["ensemble_selected"].fillna(False).astype(bool)
+        ].copy()
+    else:
+        selected_summary = probabilistic_summary.loc[
+            probabilistic_summary["edge_probability"] >= selection_probability_threshold
+        ].copy()
     max_observed_lag = 1
     for output in outputs.values():
         if output is not None and not output.empty and "lag" in output.columns:
@@ -858,6 +1279,8 @@ def select_robust_ensemble_combination(
     method_kwargs: Mapping[str, dict] | None = None,
     method_weights: Mapping[str, float] | None = None,
     expert_knowledge: pd.DataFrame | list[dict] | None = None,
+    precomputed_outputs: Mapping[str, pd.DataFrame] | None = None,
+    precomputed_bootstrap_outputs: Sequence[Mapping[str, pd.DataFrame]] | None = None,
     precompute_runs: bool = True,
     parallel_jobs: int = 1,
     max_bootstrap_seconds: float | None = None,
@@ -874,6 +1297,18 @@ def select_robust_ensemble_combination(
     adaptive_method_weights: bool = True,
     stability_weight: float = 0.65,
     local_expert_weight: float = 0.60,
+    predictive_validation_weight: float = 0.0,
+    predictive_validation_max_lag: int | None = None,
+    predictive_validation_splits: int = 3,
+    predictive_validation_ridge_alpha: float = 1.0,
+    predictive_validation_conditional_parents: int = 0,
+    predictive_validation_uncertainty_penalty: float = 0.0,
+    predictive_validation_rank_exponent: float = 0.5,
+    ranked_selection_max_pair_density: float | None = None,
+    ranked_selection_rescue_bootstrap_min: float | None = None,
+    ranked_selection_rescue_predictive_rank_min: float | None = None,
+    ranked_selection_rescue_support_min: float | None = None,
+    method_redundancy_penalty: float = 0.0,
     method_stability_power: float = 1.0,
     method_diversity_bonus: float = 0.15,
     method_density_penalty: float = 0.5,
@@ -894,10 +1329,16 @@ def select_robust_ensemble_combination(
     evaluations: dict[str, dict[str, Any]] = {}
     ranking_rows: list[dict[str, Any]] = []
 
-    base_outputs_all: dict[str, pd.DataFrame] | None = None
-    precomputed_bootstrap_outputs: list[dict[str, pd.DataFrame]] | None = None
+    base_outputs_all = (
+        dict(precomputed_outputs) if precomputed_outputs is not None else None
+    )
+    cached_bootstrap_outputs = (
+        [dict(iteration) for iteration in precomputed_bootstrap_outputs]
+        if precomputed_bootstrap_outputs is not None
+        else None
+    )
 
-    if precompute_runs:
+    if precompute_runs and base_outputs_all is None:
         # Reuso de resultados evita executar métodos pesados repetidamente por combinação.
         base_outputs_all = _run_method_suite_fast(
             data,
@@ -905,19 +1346,29 @@ def select_robust_ensemble_combination(
             method_kwargs=method_kwargs,
             parallel_jobs=parallel_jobs,
         )
+    if cached_bootstrap_outputs is not None:
+        cached_bootstrap_outputs = cached_bootstrap_outputs[: max(0, int(n_bootstrap))]
+    if precompute_runs and (
+        cached_bootstrap_outputs is None
+        or len(cached_bootstrap_outputs) < max(0, int(n_bootstrap))
+    ):
         block = block_size if block_size is not None else max(2, len(data) // 10)
         rng = np.random.default_rng(random_state)
-        precomputed_bootstrap_outputs = []
+        cached_bootstrap_outputs = cached_bootstrap_outputs or []
+        # Avanca o gerador pelas amostras ja persistidas para que estender um
+        # cache produza a mesma sequencia de uma execucao integral.
+        for _ in range(len(cached_bootstrap_outputs)):
+            _bootstrap_sample(data, block_size=block, rng=rng)
         start_time = time.perf_counter()
-        for _ in range(n_bootstrap):
+        for _ in range(len(cached_bootstrap_outputs), max(0, int(n_bootstrap))):
             if (
                 max_bootstrap_seconds is not None
-                and len(precomputed_bootstrap_outputs) > 0
+                and len(cached_bootstrap_outputs) > 0
                 and (time.perf_counter() - start_time) >= float(max_bootstrap_seconds)
             ):
                 break
             sampled_data = _bootstrap_sample(data, block_size=block, rng=rng)
-            precomputed_bootstrap_outputs.append(
+            cached_bootstrap_outputs.append(
                 _run_method_suite_fast(
                     sampled_data,
                     methods,
@@ -938,7 +1389,7 @@ def select_robust_ensemble_combination(
                 method_weights={name: method_weights[name] for name in combo if method_weights and name in method_weights},
                 expert_knowledge=expert_knowledge,
                 precomputed_outputs={name: base_outputs_all[name] for name in combo} if base_outputs_all else None,
-                precomputed_bootstrap_outputs=precomputed_bootstrap_outputs,
+                precomputed_bootstrap_outputs=cached_bootstrap_outputs,
                 parallel_jobs=parallel_jobs,
                 max_bootstrap_seconds=max_bootstrap_seconds,
                 min_votes=min_votes,
@@ -952,6 +1403,30 @@ def select_robust_ensemble_combination(
                 adaptive_method_weights=adaptive_method_weights,
                 stability_weight=stability_weight,
                 local_expert_weight=local_expert_weight,
+                predictive_validation_weight=predictive_validation_weight,
+                predictive_validation_max_lag=predictive_validation_max_lag,
+                predictive_validation_splits=predictive_validation_splits,
+                predictive_validation_ridge_alpha=predictive_validation_ridge_alpha,
+                predictive_validation_conditional_parents=(
+                    predictive_validation_conditional_parents
+                ),
+                predictive_validation_uncertainty_penalty=(
+                    predictive_validation_uncertainty_penalty
+                ),
+                predictive_validation_rank_exponent=(
+                    predictive_validation_rank_exponent
+                ),
+                ranked_selection_max_pair_density=ranked_selection_max_pair_density,
+                ranked_selection_rescue_bootstrap_min=(
+                    ranked_selection_rescue_bootstrap_min
+                ),
+                ranked_selection_rescue_predictive_rank_min=(
+                    ranked_selection_rescue_predictive_rank_min
+                ),
+                ranked_selection_rescue_support_min=(
+                    ranked_selection_rescue_support_min
+                ),
+                method_redundancy_penalty=method_redundancy_penalty,
                 method_stability_power=method_stability_power,
                 method_diversity_bonus=method_diversity_bonus,
                 method_density_penalty=method_density_penalty,
@@ -997,4 +1472,6 @@ def select_robust_ensemble_combination(
         "best_evaluation": best_eval,
         "ranking": ranking,
         "all_evaluations": evaluations,
+        "precomputed_outputs": base_outputs_all,
+        "precomputed_bootstrap_outputs": cached_bootstrap_outputs,
     }
