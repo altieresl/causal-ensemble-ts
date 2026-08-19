@@ -14,6 +14,12 @@ from .ensemble_selection import (
     run_bootstrap_stability_selection,
     select_robust_ensemble_combination,
 )
+from .ensemble_calibration import (
+    apply_calibrated_pair_ensemble,
+    calibrate_top_k_by_f1,
+    combine_candidate_scores,
+    fit_cross_validated_greedy_ensemble,
+)
 from .expert_knowledge import (
     apply_expert_knowledge_to_summary,
     extract_method_weights,
@@ -46,13 +52,17 @@ __all__ = [
     "TimeSeriesDataset",
     "add_predictive_validation_score",
     "add_ranked_structure_selection",
+    "apply_calibrated_pair_ensemble",
     "apply_expert_knowledge_to_summary",
     "build_complete_undirected_pair_scores",
+    "calibrate_top_k_by_f1",
+    "combine_candidate_scores",
     "create_interactive_ensemble_dashboard",
     "create_synthetic_dataset",
     "causal_method",
     "compute_method_consistency",
     "estimate_adaptive_method_weights",
+    "fit_cross_validated_greedy_ensemble",
     "compute_paired_superiority_statistics",
     "compute_structural_metrics",
     "compute_undirected_skeleton_metrics",
