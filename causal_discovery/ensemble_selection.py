@@ -809,6 +809,55 @@ def add_ranked_structure_selection(
     return frame
 
 
+def add_precision_consensus_selection(
+    summary: pd.DataFrame,
+    *,
+    score_threshold: float = 0.5,
+    method_support_threshold: float = 0.5,
+    bootstrap_threshold: float | None = None,
+    score_column: str = "ensemble_score",
+    support_column: str = "support_ratio",
+    bootstrap_column: str = "bootstrap_probability",
+    selection_column: str = "ensemble_selected",
+) -> pd.DataFrame:
+    """Seleciona apenas arestas com escore alto e consenso entre métodos.
+
+    A regra implementa votação majoritária no segundo nível do ensemble. O
+    limiar bootstrap é opcional porque o ``ensemble_score`` já pode incorporar
+    a agregação das reamostragens. A função altera somente a decisão binária e
+    preserva as probabilidades e os escores usados na avaliação de ranking.
+    """
+    for name, value in (
+        ("score_threshold", score_threshold),
+        ("method_support_threshold", method_support_threshold),
+    ):
+        if not 0.0 <= float(value) <= 1.0:
+            raise ValueError(f"{name} deve estar entre 0 e 1.")
+    if bootstrap_threshold is not None and not 0.0 <= float(bootstrap_threshold) <= 1.0:
+        raise ValueError("bootstrap_threshold deve estar entre 0 e 1.")
+
+    frame = summary.copy()
+    required = {score_column, support_column}
+    if bootstrap_threshold is not None:
+        required.add(bootstrap_column)
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise ValueError("Colunas ausentes para consenso: " + ", ".join(missing))
+
+    score = pd.to_numeric(frame[score_column], errors="coerce").fillna(0.0)
+    support = pd.to_numeric(frame[support_column], errors="coerce").fillna(0.0)
+    selected = (score >= float(score_threshold)) & (
+        support >= float(method_support_threshold)
+    )
+    if bootstrap_threshold is not None:
+        bootstrap = pd.to_numeric(
+            frame[bootstrap_column], errors="coerce"
+        ).fillna(0.0)
+        selected &= bootstrap >= float(bootstrap_threshold)
+    frame[selection_column] = selected.astype(bool)
+    return frame
+
+
 def _moving_block_bootstrap_indices(n: int, block_size: int, rng: np.random.Generator) -> np.ndarray:
     if n <= 0:
         return np.array([], dtype=int)

@@ -6,6 +6,7 @@ from .datasets import (
 )
 from .ensemble import run_method_suite, summarize_ensemble, summarize_probabilistic_ensemble
 from .ensemble_selection import (
+    add_precision_consensus_selection,
     add_predictive_validation_score,
     add_ranked_structure_selection,
     compute_method_consistency,
@@ -50,6 +51,7 @@ __all__ = [
     "CausalMethodSpec",
     "MethodOutputValidationError",
     "TimeSeriesDataset",
+    "add_precision_consensus_selection",
     "add_predictive_validation_score",
     "add_ranked_structure_selection",
     "apply_calibrated_pair_ensemble",
