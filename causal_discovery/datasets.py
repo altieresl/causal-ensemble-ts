@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence
@@ -96,11 +97,69 @@ def _normalize_selected_columns(
     return selected
 
 
+def _parse_toy_ground_truth_edge(edge: object) -> tuple[str, str]:
+    """Separa uma aresta no formato ``'ORIGEM → DESTINO'`` em (origem, destino)."""
+    parts = [part.strip() for part in re.split(r"\s*→\s*", str(edge).strip())]
+    if len(parts) != 2 or not all(parts):
+        raise ValueError(
+            f"Não foi possível interpretar a aresta do ground truth: {edge!r}. "
+            "Formato esperado: 'ORIGEM → DESTINO'."
+        )
+    return parts[0], parts[1]
+
+
+def _load_toy_ground_truth_csv(
+    ground_truth_path: Path,
+    selected_columns: Sequence[str],
+) -> pd.DataFrame:
+    """Carrega o ground truth no formato produzido por ``synthetic_causal_datasets.ipynb``.
+
+    Espera as colunas ``Edge`` (ex.: ``'X1 → Y'``) e ``Direct`` (booleano), com uma
+    coluna ``Lag`` opcional. Somente arestas com ``Direct == True`` entram no ground
+    truth; as demais linhas apenas documentam relações indiretas ou inexistentes e
+    não devem ser tratadas como arestas verdadeiras.
+    """
+    if not ground_truth_path.exists():
+        raise FileNotFoundError(f"Ground truth não encontrado em {ground_truth_path}.")
+
+    frame = pd.read_csv(ground_truth_path)
+    required_columns = {"Edge", "Direct"}
+    missing_columns = required_columns - set(frame.columns)
+    if missing_columns:
+        raise ValueError(
+            "O CSV de ground truth não possui as colunas obrigatórias: "
+            f"{sorted(missing_columns)}"
+        )
+
+    direct_mask = frame["Direct"].astype(bool)
+    has_lag_column = "Lag" in frame.columns
+    allowed = {str(column) for column in selected_columns}
+
+    records = []
+    for _, row in frame.loc[direct_mask].iterrows():
+        source, target = _parse_toy_ground_truth_edge(row["Edge"])
+        if source not in allowed or target not in allowed:
+            continue
+        lag_value = row["Lag"] if has_lag_column else pd.NA
+        records.append(
+            {
+                "source": source,
+                "target": target,
+                "lag": pd.NA if pd.isna(lag_value) else int(lag_value),
+            }
+        )
+
+    ground_truth = pd.DataFrame(records, columns=UNKNOWN_LAG_EDGE_COLUMNS)
+    ground_truth["lag"] = pd.array(ground_truth["lag"], dtype="Int64")
+    return ground_truth
+
+
 def _load_csv_dataset(
     data_path: Path,
     *,
     selected_columns: Sequence[str] | None,
     date_column: str | None,
+    ground_truth_path: Path | None = None,
 ) -> TimeSeriesDataset:
     parse_dates = [date_column] if date_column else None
     frame = pd.read_csv(data_path, parse_dates=parse_dates)
@@ -112,16 +171,27 @@ def _load_csv_dataset(
     available = tuple(frame.select_dtypes(include=[np.number]).columns.astype(str))
     selected = _normalize_selected_columns(available, selected_columns)
     data = frame.loc[:, list(selected)].copy()
+
+    ground_truth = (
+        _load_toy_ground_truth_csv(ground_truth_path, selected)
+        if ground_truth_path is not None
+        else pd.DataFrame(columns=UNKNOWN_LAG_EDGE_COLUMNS)
+    )
+
     return TimeSeriesDataset(
         data=data,
         available_columns=available,
         selected_columns=selected,
         source_format="csv",
+        ground_truth=ground_truth,
         metadata={
             "data_path": str(data_path),
             "date_column": date_column,
             "trajectory_index": 0,
-            "ground_truth_has_lag": False,
+            "ground_truth_path": (
+                str(ground_truth_path) if ground_truth_path is not None else None
+            ),
+            "ground_truth_has_lag": ground_truth_path is not None,
         },
     )
 
@@ -237,6 +307,7 @@ def load_time_series_dataset(
     data_format: str = "auto",
     selected_columns: Sequence[str] | None = None,
     date_column: str | None = None,
+    ground_truth_path: str | Path | None = None,
     graph_path: str | Path | None = None,
     trajectory_index: int = 0,
     column_names: Sequence[str] | None = None,
@@ -245,7 +316,12 @@ def load_time_series_dataset(
     """Carrega CSV ou CausalTime NPY por uma API única.
 
     ``selected_columns=None`` seleciona dinamicamente todas as variáveis numéricas
-    do CSV ou todos os nós observados do CausalTime.
+    do CSV ou todos os nós observados do CausalTime. ``ground_truth_path`` é
+    exclusivo de ``data_format='csv'`` e aponta para um CSV com colunas ``Edge``
+    (formato ``'ORIGEM → DESTINO'``) e ``Direct`` — como o gerado por
+    ``synthetic_causal_datasets.ipynb`` — usado para anexar arestas causais
+    conhecidas a um dataset tabular. O CausalTime usa ``graph_path`` para o mesmo
+    propósito.
     """
     path = Path(data_path)
     if not path.exists():
@@ -260,8 +336,16 @@ def load_time_series_dataset(
             path,
             selected_columns=selected_columns,
             date_column=date_column,
+            ground_truth_path=(
+                Path(ground_truth_path) if ground_truth_path is not None else None
+            ),
         )
     if normalized_format in {"causaltime", "npy"}:
+        if ground_truth_path is not None:
+            raise ValueError(
+                "ground_truth_path só é aplicável a data_format='csv'; "
+                "o CausalTime usa graph_path."
+            )
         return _load_causaltime_dataset(
             path,
             graph_path=Path(graph_path) if graph_path is not None else None,
