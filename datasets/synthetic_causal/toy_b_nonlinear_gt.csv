@@ -1,0 +1,6 @@
+Edge,Direct,Coefficient,Lag,Type
+X1 → Y,True,0.7,1.0,tanh(·)
+X3 → Y,True,0.3,1.0,tanh(·)
+X4 → X1,True,0.6,1.0,tanh(·)
+X4 → Y,False,,,indirect via X1
+X0 → Y,False,0.0,,none (noise)
