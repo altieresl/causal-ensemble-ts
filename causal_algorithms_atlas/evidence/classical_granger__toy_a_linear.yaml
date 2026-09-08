@@ -1,0 +1,10 @@
+algorithm_id: classical_granger
+dataset: toy_a_linear
+source: "datasets/synthetic_causal/toy_a_linear.csv + toy_a_linear_gt.csv"
+metrics:
+  precision: 0.75
+  recall: 1.0
+  f1_score: 0.8571428571428571
+notes: >
+  Medido no benchmark sintetico do projeto. Fonte bruta:
+  .local/results/toy_synthetic_validation/metrics.csv (nao versionado).

@@ -1,0 +1,10 @@
+algorithm_id: fci
+dataset: toy_a_linear
+source: "datasets/synthetic_causal/toy_a_linear.csv + toy_a_linear_gt.csv"
+metrics:
+  precision: 1.0
+  recall: 1.0
+  f1_score: 1.0
+notes: >
+  Medido no benchmark sintetico do projeto. Fonte bruta:
+  .local/results/toy_synthetic_validation/metrics.csv (nao versionado).

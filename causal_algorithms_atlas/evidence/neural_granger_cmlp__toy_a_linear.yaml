@@ -1,0 +1,11 @@
+algorithm_id: neural_granger_cmlp
+dataset: toy_a_linear
+source: "datasets/synthetic_causal/toy_a_linear.csv + toy_a_linear_gt.csv"
+metrics:
+  precision: 0.3
+  recall: 1.0
+  f1_score: 0.4615384615384615
+notes: >
+  Medido no benchmark sintetico do projeto: alta taxa de falsos positivos neste
+  dataset pequeno. Fonte bruta:
+  .local/results/toy_synthetic_validation/metrics.csv (nao versionado).
