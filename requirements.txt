@@ -10,3 +10,4 @@ torch
 plotly
 ipywidgets
 nbformat
+pyyaml

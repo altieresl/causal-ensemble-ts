@@ -61,6 +61,26 @@ canônicas, nomes de variáveis, lags, scores e p-valores; uma violação produz
 `MethodOutputValidationError` identificando o método e o problema. Depois da inclusão,
 o único registro adicional necessário é atualizar a documentação com o novo algoritmo.
 
+## Base de conhecimento de algoritmos (causal_algorithms_atlas)
+
+O pacote `causal_algorithms_atlas/` mantém uma base de conhecimento verificada sobre
+algoritmos de causal discovery em séries temporais, independente do pipeline de
+execução em `causal_discovery/`. Cada algoritmo tem uma ficha em
+`causal_algorithms_atlas/algorithms/<id>.md` (frontmatter YAML com premissas,
+requisitos de dados e referências verificadas + prosa explicativa em português). A
+camada `causal_algorithms_atlas/evidence/` guarda resultados empíricos medidos neste
+projeto, separados do conteúdo de literatura.
+
+Comandos úteis:
+
+- `python -m pytest tests/test_atlas_content.py -v` — confere que todo método
+  registrado no framework tem ficha `verified` no atlas.
+- `python -m causal_algorithms_atlas.eda` — gera gráficos (HTML) descrevendo a
+  cobertura da base por família de algoritmo e por premissa.
+- `python -m causal_algorithms_atlas.rag_chat "pergunta"` — consulta de debug via RAG
+  (TF-IDF + Ollama local, modelo `llama3.1:8b`) para inspecionar manualmente a
+  recuperação antes de qualquer uso mais sério.
+
 Fluxo principal:
 
 1. carregar e pré-processar as séries;
