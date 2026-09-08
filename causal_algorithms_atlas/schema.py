@@ -15,6 +15,7 @@ class AlgorithmFamily(str, Enum):
     GRANGER_BASED = "granger-based"
     CONTINUOUS_OPTIMIZATION = "continuous-optimization"
     INFORMATION_THEORETIC = "information-theoretic"
+    STATE_SPACE_RECONSTRUCTION = "state-space-reconstruction"
     HYBRID = "hybrid"
 
 
@@ -54,6 +55,7 @@ KNOWN_ASSUMPTIONS: frozenset[str] = frozenset(
         "faithfulness",
         "markov_condition",
         "no_selection_bias",
+        "deterministic_dynamics",
     }
 )
 

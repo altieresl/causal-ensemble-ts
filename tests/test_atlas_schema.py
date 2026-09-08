@@ -55,6 +55,7 @@ class KnownAssumptionsTests(unittest.TestCase):
             "faithfulness",
             "markov_condition",
             "no_selection_bias",
+            "deterministic_dynamics",
         }
         self.assertEqual(KNOWN_ASSUMPTIONS, frozenset(expected))
 

@@ -61,3 +61,83 @@ spirtes1995:
   venue: "UAI"
   url: "https://www.cs.cmu.edu/afs/cs/project/learn-43/lib/photoz/.g/web/.g/scottd/fullbook.pdf"
   verified: true
+
+spirtes1991:
+  authors: "Spirtes, P., Glymour, C."
+  year: 1991
+  title: "An Algorithm for Fast Recovery of Sparse Causal Graphs"
+  venue: "Social Science Computer Review"
+  doi: "10.1177/089443939100900106"
+  verified: true
+
+colombo2014:
+  authors: "Colombo, D., Maathuis, M. H."
+  year: 2014
+  title: "Order-Independent Constraint-Based Causal Structure Learning"
+  venue: "Journal of Machine Learning Research"
+  url: "https://jmlr.org/papers/v15/colombo14a.html"
+  verified: true
+
+runge2020pcmciplus:
+  authors: "Runge, J."
+  year: 2020
+  title: "Discovering contemporaneous and lagged causal relations in autocorrelated nonlinear time series datasets"
+  venue: "PMLR (UAI)"
+  url: "https://proceedings.mlr.press/v124/runge20a.html"
+  verified: true
+
+schreiber2000:
+  authors: "Schreiber, T."
+  year: 2000
+  title: "Measuring Information Transfer"
+  venue: "Physical Review Letters"
+  doi: "10.1103/PhysRevLett.85.461"
+  verified: true
+
+sugihara2012:
+  authors: "Sugihara, G., May, R., Ye, H., Hsieh, C., Deyle, E., Fogarty, M., Munch, S."
+  year: 2012
+  title: "Detecting Causality in Complex Ecosystems"
+  venue: "Science"
+  doi: "10.1126/science.1227079"
+  verified: true
+
+peters2013:
+  authors: "Peters, J., Janzing, D., Schölkopf, B."
+  year: 2013
+  title: "Causal Inference on Time Series using Restricted Structural Equation Models"
+  venue: "NeurIPS"
+  url: "https://proceedings.neurips.cc/paper_files/paper/2013/hash/47d1e990583c9c67424d369f3414728e-Abstract.html"
+  verified: true
+
+zheng2018:
+  authors: "Zheng, X., Aragam, B., Ravikumar, P., Xing, E. P."
+  year: 2018
+  title: "DAGs with NO TEARS: Continuous Optimization for Structure Learning"
+  venue: "NeurIPS"
+  url: "https://proceedings.neurips.cc/paper/2018/hash/e347c51419ffb23ca3fd5050202f9c3d-Abstract.html"
+  verified: true
+
+entner2010:
+  authors: "Entner, D., Hoyer, P. O."
+  year: 2010
+  title: "On Causal Discovery from Time Series Data using FCI"
+  venue: "Proceedings of the 5th European Workshop on Probabilistic Graphical Models (PGM)"
+  url: "https://sites.google.com/site/dorisentner/publications/tsfci"
+  verified: true
+
+malinsky2018:
+  authors: "Malinsky, D., Spirtes, P."
+  year: 2018
+  title: "Causal Structure Learning from Multivariate Time Series in Settings with Unmeasured Confounding"
+  venue: "PMLR (ACM SIGKDD Workshop on Causal Discovery)"
+  url: "https://proceedings.mlr.press/v92/malinsky18a.html"
+  verified: true
+
+nauta2019:
+  authors: "Nauta, M., Bucur, D., Seifert, C."
+  year: 2019
+  title: "Causal Discovery with Attention-Based Convolutional Neural Networks"
+  venue: "Machine Learning and Knowledge Extraction"
+  doi: "10.3390/make1010019"
+  verified: true
