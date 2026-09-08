@@ -1,0 +1,63 @@
+runge2019:
+  authors: "Runge, J., Nowack, P., Kretschmer, M., Flaxman, S., Sejdinovic, D."
+  year: 2019
+  title: "Detecting and quantifying causal associations in large nonlinear time series datasets"
+  venue: "Science Advances"
+  doi: "10.1126/sciadv.aau4996"
+  verified: true
+
+gerhardus2020:
+  authors: "Gerhardus, A., Runge, J."
+  year: 2020
+  title: "High-recall causal discovery for autocorrelated time series with latent confounders"
+  venue: "NeurIPS"
+  url: "https://proceedings.neurips.cc/paper_files/paper/2020/hash/94e70705efae423efda1088614128d0b-Abstract.html"
+  verified: true
+
+granger1969:
+  authors: "Granger, C. W. J."
+  year: 1969
+  title: "Investigating Causal Relations by Econometric Models and Cross-spectral Methods"
+  venue: "Econometrica"
+  url: "https://www.jstor.org/stable/1912791"
+  verified: true
+
+tank2021:
+  authors: "Tank, A., Covert, I., Foti, N., Shojaie, A., Fox, E. B."
+  year: 2021
+  title: "Neural Granger Causality"
+  venue: "IEEE Transactions on Pattern Analysis and Machine Intelligence"
+  doi: "10.1109/TPAMI.2021.3065601"
+  verified: true
+
+hyvarinen2010:
+  authors: "Hyvärinen, A., Zhang, K., Shimizu, S., Hoyer, P. O."
+  year: 2010
+  title: "Estimation of a Structural Vector Autoregression Model Using Non-Gaussianity"
+  venue: "Journal of Machine Learning Research"
+  url: "https://www.jmlr.org/papers/v11/hyvarinen10a.html"
+  verified: true
+
+pamfil2020:
+  authors: "Pamfil, R., Sriwattanaworachai, N., Desai, S., Pilgerstorfer, P., Georgatzis, K., Beaumont, P., Aragam, B."
+  year: 2020
+  title: "DYNOTEARS: Structure Learning from Time-Series Data"
+  venue: "AISTATS / PMLR"
+  url: "https://proceedings.mlr.press/v108/pamfil20a.html"
+  verified: true
+
+chickering2002:
+  authors: "Chickering, D. M."
+  year: 2002
+  title: "Optimal Structure Identification With Greedy Search"
+  venue: "Journal of Machine Learning Research"
+  url: "https://www.jmlr.org/papers/v3/chickering02b.html"
+  verified: true
+
+spirtes1995:
+  authors: "Spirtes, P., Meek, C., Richardson, T."
+  year: 1995
+  title: "Causal Inference in the Presence of Latent Variables and Selection Bias"
+  venue: "UAI"
+  url: "https://www.cs.cmu.edu/afs/cs/project/learn-43/lib/photoz/.g/web/.g/scottd/fullbook.pdf"
+  verified: true
