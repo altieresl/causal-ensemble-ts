@@ -35,6 +35,22 @@ def _random_walk_data(n: int = 300, seed: int = 3) -> pd.DataFrame:
     return pd.DataFrame({"w": walk})
 
 
+def _cross_variable_nonlinear_data(n: int = 400, seed: int = 5) -> pd.DataFrame:
+    """x tem autodinamica linear; y depende nao linearmente do LAG de x, nao de si mesma.
+
+    Um teste de linearidade que so olha a autorregressao de cada variavel isolada
+    (y[t] ~ y[t-1]) erra este caso: a nao linearidade esta na relacao x -> y, nao na
+    dinamica propria de y.
+    """
+    rng = np.random.default_rng(seed)
+    x = np.zeros(n)
+    y = np.zeros(n)
+    for t in range(1, n):
+        x[t] = 0.5 * x[t - 1] + rng.normal(0, 0.3)
+        y[t] = 0.3 * y[t - 1] + 1.5 * np.tanh(x[t - 1] * 3) + rng.normal(0, 0.15)
+    return pd.DataFrame({"x": x, "y": y})
+
+
 class ProfileDatasetTests(unittest.TestCase):
     def test_reports_shape(self):
         data = _linear_stationary_data(n=200)
@@ -62,6 +78,12 @@ class ProfileDatasetTests(unittest.TestCase):
         data = _nonlinear_stationary_data(n=300)
         profile = profile_dataset(data)
         self.assertFalse(profile.mostly_linear)
+
+    def test_detects_nonlinearity_that_only_shows_in_cross_variable_relation(self):
+        data = _cross_variable_nonlinear_data()
+        profile = profile_dataset(data)
+        by_name = {v.name: v for v in profile.variables}
+        self.assertFalse(by_name["y"].linear)
 
     def test_too_short_series_is_marked_untestable_not_guessed(self):
         data = pd.DataFrame({"x": [1.0, 2.0, 3.0]})
