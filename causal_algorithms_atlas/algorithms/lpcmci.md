@@ -12,6 +12,9 @@ assumptions:
   - id: faithfulness
     required: true
     statement: "Independencias observadas refletem a estrutura causal, nao coincidencia."
+  - id: linearity
+    required: true
+    statement: "O wrapper do framework usa ParCorr (correlacao parcial) como teste de independencia condicional, o que restringe a deteccao a dependencias lineares gaussianas."
 handles_latent_confounders: true
 handles_nonlinearity: false
 handles_contemporaneous_effects: true
