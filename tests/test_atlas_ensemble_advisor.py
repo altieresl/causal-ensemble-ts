@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from causal_algorithms_atlas.dataset_profile import DatasetProfile, VariableProfile
 from causal_algorithms_atlas.ensemble_advisor import (
+    explain_recommendation,
     recommend_framework_methods,
     select_candidate_methods,
 )
@@ -83,6 +85,30 @@ class SelectCandidateMethodsTests(unittest.TestCase):
         self.assertNotIn("ClassicalGranger", methods)
         for callable_method in methods.values():
             self.assertTrue(callable(callable_method))
+
+
+class ExplainRecommendationTests(unittest.TestCase):
+    def test_prompt_sent_to_ollama_cites_included_and_excluded_reasons(self):
+        profile = _profile(mostly_linear=False, mostly_stationary=True)
+        recommendations = recommend_framework_methods(profile)
+
+        captured_prompts: list[str] = []
+
+        def fake_call_ollama(prompt: str, **kwargs):
+            captured_prompts.append(prompt)
+            return "resposta simulada"
+
+        with patch(
+            "causal_algorithms_atlas.rag_chat.call_ollama", side_effect=fake_call_ollama
+        ):
+            answer = explain_recommendation(profile, recommendations)
+
+        self.assertEqual(answer, "resposta simulada")
+        self.assertEqual(len(captured_prompts), 1)
+        prompt = captured_prompts[0]
+        self.assertIn("NeuralGrangercMLP", prompt)
+        self.assertIn("ClassicalGranger", prompt)
+        self.assertIn("nao linearidade", prompt)
 
 
 if __name__ == "__main__":

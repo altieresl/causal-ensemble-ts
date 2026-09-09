@@ -114,3 +114,45 @@ def select_candidate_methods(
         for rec in recommendations
         if rec.included and rec.framework_method_name in registered
     }
+
+
+def explain_recommendation(
+    profile: DatasetProfile,
+    recommendations: list[MethodRecommendation],
+    *,
+    algorithms_dir: str | Path = _ALGORITHMS_DIR,
+    model: str = "llama3.1:8b",
+) -> str:
+    """Pede ao Llama local um resumo em prosa da composicao do ensemble.
+
+    A decisao de inclusao/exclusao ja foi tomada por ``recommend_framework_methods``
+    (deterministica, sem ground truth); esta funcao so traduz essa decisao e seus
+    motivos ja calculados para um paragrafo legivel, citando apenas o que foi
+    fornecido no prompt.
+    """
+    from causal_algorithms_atlas import rag_chat
+
+    cards = load_algorithm_cards(algorithms_dir)
+    included = [rec for rec in recommendations if rec.included]
+    excluded = [rec for rec in recommendations if not rec.included]
+
+    def _describe(rec: MethodRecommendation) -> str:
+        idea = cards[rec.algorithm_id].sections.get("Ideia central", "")
+        motivo = " ".join(rec.reasons)
+        return f"- {rec.framework_method_name}: {idea}\n  Motivo: {motivo}"
+
+    included_block = "\n".join(_describe(rec) for rec in included) or "(nenhum metodo incluido)"
+    excluded_block = "\n".join(_describe(rec) for rec in excluded) or "(nenhum metodo excluido)"
+
+    prompt = (
+        "Voce e um assistente que explica, em portugues e de forma direta, por que "
+        "um subconjunto de algoritmos de causal discovery foi selecionado para um "
+        "ensemble, com base no perfil do dataset abaixo. Baseie-se exclusivamente "
+        "nas informacoes fornecidas; nao invente premissas nao mencionadas.\n\n"
+        f"Perfil do dataset: {profile.to_query_text()}\n\n"
+        f"Metodos incluidos:\n{included_block}\n\n"
+        f"Metodos excluidos:\n{excluded_block}\n\n"
+        "Escreva um paragrafo curto resumindo a composicao do ensemble e a razao "
+        "de cada exclusao."
+    )
+    return rag_chat.call_ollama(prompt, model=model)
