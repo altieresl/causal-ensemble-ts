@@ -9,7 +9,15 @@ from statsmodels.tsa.stattools import adfuller
 _STATIONARITY_ALPHA = 0.05
 _MIN_OBSERVATIONS_FOR_ADF = 8
 _MIN_OBSERVATIONS_FOR_EFFECT_SIZE = 40
-_NONLINEARITY_EFFECT_SIZE_THRESHOLD = 0.10
+# Calibrado empiricamente (nao e um valor convencional como o alfa=0.05 de
+# significancia): em toy_a_linear (relacoes lineares conhecidas), o "chao de
+# ruido" do ganho preditivo fica abaixo de 0.001. Em toy_b_nonlinear (relacoes
+# tanh conhecidas via ground truth), Y e X1 -- as variaveis que de fato recebem
+# uma entrada transformada por tanh -- ficam em 0.009-0.012. 0.005 separa os
+# dois grupos com margem razoavel dos dois lados. Ainda e uma escolha de
+# calibracao, nao uma verdade estatistica -- revisar se novos datasets
+# mostrarem uma zona cinzenta diferente.
+_NONLINEARITY_EFFECT_SIZE_THRESHOLD = 0.005
 _N_VALIDATION_SPLITS = 4
 
 
@@ -88,6 +96,27 @@ def _adf_p_value(series: pd.Series) -> float | None:
         return float(adfuller(cleaned)[1])
     except Exception:
         return None
+
+
+_WINSORIZE_PERCENTILES = (1.0, 99.0)
+
+
+def _winsorize(values: np.ndarray) -> np.ndarray:
+    """Recorta valores fora do percentil 1-99 para o limite mais proximo.
+
+    Series reais podem ter erros de sensor/registro (ex.: um unico valor de
+    pressao atmosferica de 7679 num dataset onde o normal e ~1010, presente em
+    DailyDelhiClimateTrain.csv). Um outlier assim, elevado ao cubo na expansao
+    polinomial, domina a regressao inteira e produz "ganhos preditivos"
+    numericamente absurdos (ja observados neste projeto: valores na casa dos
+    bilhões) que nao tem nada a ver com a forma funcional real da relacao.
+    """
+    if values.ndim == 1:
+        low, high = np.percentile(values, _WINSORIZE_PERCENTILES)
+        return np.clip(values, low, high)
+    low = np.percentile(values, _WINSORIZE_PERCENTILES[0], axis=0)
+    high = np.percentile(values, _WINSORIZE_PERCENTILES[1], axis=0)
+    return np.clip(values, low, high)
 
 
 def _expanding_splits(n: int, n_splits: int) -> list[tuple[np.ndarray, np.ndarray]]:
@@ -187,19 +216,33 @@ def _nonlinearity_effect_size_for_target(
     if len(frame) < _MIN_OBSERVATIONS_FOR_EFFECT_SIZE:
         return None
 
-    target = frame[target_column].to_numpy(dtype=float)
-    predictors = frame.drop(columns=[target_column]).to_numpy(dtype=float)
+    target = _winsorize(frame[target_column].to_numpy(dtype=float))
+    predictors = _winsorize(frame.drop(columns=[target_column]).to_numpy(dtype=float))
     varying_columns = np.std(predictors, axis=0) > 1e-12
     predictors = predictors[:, varying_columns]
     if predictors.shape[1] == 0 or np.std(target) < 1e-12:
         return None
 
+    # Padroniza os preditores ANTES de elevar ao quadrado/cubo, nao depois.
+    # Variaveis em escalas bem diferentes (ex.: pressao atmosferica ~1000 vs
+    # velocidade do vento ~5) produzem termos cubicos com magnitude descontrolada
+    # se elevados ao cubo em escala bruta -- confirmado empiricamente neste
+    # projeto: sem essa padronizacao previa, o dataset real
+    # DailyDelhiClimateTrain.csv produzia "ganhos" de ate -362 (nonsense numerico),
+    # nao um sinal de nao linearidade.
+    predictor_mean = predictors.mean(axis=0)
+    predictor_scale = predictors.std(axis=0)
+    predictor_scale[predictor_scale < 1e-12] = 1.0
+    standardized_predictors = (predictors - predictor_mean) / predictor_scale
+
     # Sem intercepto explicito: _ridge_mse centraliza features e alvo internamente.
-    linear_design = predictors
+    linear_design = standardized_predictors
     # Graus 2 e 3: uma nao linearidade impar e simetrica como tanh(x) nao tem termo
     # quadratico relevante na expansao de Taylor (mesma licao do RESET power=2 vs
     # power=3 aplicada aqui) -- so o grau 2 deixaria passar despercebida.
-    nonlinear_design = np.hstack([predictors, predictors**2, predictors**3])
+    nonlinear_design = np.hstack(
+        [standardized_predictors, standardized_predictors**2, standardized_predictors**3]
+    )
 
     splits = _expanding_splits(len(frame), _N_VALIDATION_SPLITS)
     if not splits:
