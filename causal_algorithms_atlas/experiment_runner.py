@@ -103,12 +103,36 @@ def run_experiment(
             for rec in recommendations
             if not rec.included
         ]
-        raise InsufficientCandidatesError(
+        message = (
             f"Apenas {len(candidates)} metodo(s) do framework sao compativeis com o "
             f"perfil deste dataset ({dataset_name}): {sorted(candidates)}. Um ensemble "
             "precisa de pelo menos 2 metodos concordando (min_votes>=2). Metodos "
             f"excluidos e motivo: {excluded}"
         )
+        if history_path is not None:
+            failure_record = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "dataset_name": dataset_name,
+                "n_variables": profile.n_variables,
+                "n_timepoints": profile.n_timepoints,
+                "outcome": "insufficient_candidates",
+                "candidate_methods": sorted(candidates),
+                "recommendations": [
+                    {
+                        "framework_method_name": rec.framework_method_name,
+                        "algorithm_id": rec.algorithm_id,
+                        "included": rec.included,
+                        "reasons": list(rec.reasons),
+                    }
+                    for rec in recommendations
+                ],
+                "message": message,
+            }
+            history_path_obj = Path(history_path)
+            history_path_obj.parent.mkdir(parents=True, exist_ok=True)
+            with open(history_path_obj, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(failure_record, ensure_ascii=False, default=str) + "\n")
+        raise InsufficientCandidatesError(message)
 
     effective_max_methods = max_methods if max_methods is not None else len(candidates)
     method_kwargs = {name: {"max_lag": max_lag} for name in candidates}

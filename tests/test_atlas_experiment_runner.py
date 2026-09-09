@@ -118,6 +118,26 @@ class RunExperimentTests(unittest.TestCase):
                 random_state=1,
             )
 
+    def test_insufficient_candidates_is_still_logged_to_history(self):
+        data, _ = _tiny_linear_dataset()
+        with tempfile.TemporaryDirectory() as tmp:
+            history_path = Path(tmp) / "history.jsonl"
+            with self.assertRaises(InsufficientCandidatesError):
+                run_experiment(
+                    data,
+                    ground_truth=None,
+                    dataset_name="toy_single_candidate",
+                    candidate_method_names={"NeuralGrangercMLP"},
+                    n_bootstrap=2,
+                    random_state=1,
+                    history_path=history_path,
+                )
+            lines = history_path.read_text(encoding="utf-8").strip().splitlines()
+            self.assertEqual(len(lines), 1)
+            record = json.loads(lines[0])
+            self.assertEqual(record["outcome"], "insufficient_candidates")
+            self.assertEqual(record["dataset_name"], "toy_single_candidate")
+
 
 if __name__ == "__main__":
     unittest.main()
