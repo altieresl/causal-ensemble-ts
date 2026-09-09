@@ -12,6 +12,9 @@ assumptions:
   - id: faithfulness
     required: true
     statement: "Independencias observadas refletem a estrutura causal, nao coincidencia."
+  - id: linearity
+    required: true
+    statement: "O wrapper do framework usa o score local_score_BIC (BIC gaussiano) por padrao, o que assume relacoes lineares com residuos gaussianos."
 handles_latent_confounders: false
 handles_nonlinearity: false
 handles_contemporaneous_effects: true
