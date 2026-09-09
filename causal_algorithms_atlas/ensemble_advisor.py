@@ -68,16 +68,17 @@ def recommend_framework_methods(
         if requires_linearity:
             if profile.mostly_linear:
                 reasons.append(
-                    "Assume relacoes lineares; "
-                    f"{profile.linear_fraction:.0%} das series testadas nao rejeitaram "
-                    "linearidade no teste RESET."
+                    "Assume relacoes lineares; em "
+                    f"{profile.linear_fraction:.0%} das series testadas, permitir termos "
+                    "nao lineares nao reduziu o erro de previsao fora da amostra o "
+                    "suficiente para importar na pratica."
                 )
             else:
                 included = False
                 reasons.append(
-                    "Assume relacoes lineares, mas "
-                    f"{1.0 - profile.linear_fraction:.0%} das series testadas mostraram "
-                    "nao linearidade significativa no teste RESET."
+                    "Assume relacoes lineares, mas em "
+                    f"{1.0 - profile.linear_fraction:.0%} das series testadas um modelo "
+                    "com termos nao lineares previu bem melhor fora da amostra."
                 )
         elif card.handles_nonlinearity and not profile.mostly_linear:
             reasons.append(

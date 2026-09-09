@@ -20,7 +20,7 @@ def _profile(*, mostly_linear: bool, mostly_stationary: bool) -> DatasetProfile:
             stationary=stationary_value,
             adf_p_value=0.01 if stationary_value else 0.9,
             linear=linear_value,
-            reset_p_value=0.9 if linear_value else 0.01,
+            nonlinearity_effect_size=0.01 if linear_value else 0.9,
         ),
     )
     return DatasetProfile(n_variables=1, n_timepoints=300, variables=variables)
@@ -108,7 +108,7 @@ class ExplainRecommendationTests(unittest.TestCase):
         prompt = captured_prompts[0]
         self.assertIn("NeuralGrangercMLP", prompt)
         self.assertIn("ClassicalGranger", prompt)
-        self.assertIn("nao linearidade", prompt)
+        self.assertIn("nao lineares previu bem melhor", prompt)
 
 
 if __name__ == "__main__":

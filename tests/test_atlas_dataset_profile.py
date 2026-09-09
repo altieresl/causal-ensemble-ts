@@ -18,14 +18,25 @@ def _linear_stationary_data(n: int = 300, seed: int = 1) -> pd.DataFrame:
     return pd.DataFrame({"x": x, "y": y})
 
 
-def _nonlinear_stationary_data(n: int = 300, seed: int = 2) -> pd.DataFrame:
+def _nonlinear_stationary_data(n: int = 400, seed: int = 2) -> pd.DataFrame:
+    """z e um AR(1) linear estavel; x e y sao funcoes tanh(.) do lag de z.
+
+    Duas series tanh AUTORREFERENCIADAS (x[t] ~ tanh(x[t-1])) com coeficiente/escala
+    fortes tem derivada > 1 no ponto fixo em zero -- o mapa fica instavel/quase
+    caotico, e nenhum modelo suave (linear ou polinomial) preve bem fora da amostra
+    nesse regime, mascarando a comparacao. Usar uma variavel dirigida por um AR(1)
+    estavel evita essa armadilha e mede o que interessa: o teste detecta a curvatura
+    tanh na relacao causal, nao a previsibilidade de um sistema caotico.
+    """
     rng = np.random.default_rng(seed)
+    z = np.zeros(n)
     x = np.zeros(n)
     y = np.zeros(n)
     for t in range(1, n):
-        x[t] = 0.9 * np.tanh(x[t - 1] * 2.5) + rng.normal(0, 0.2)
-        y[t] = 0.5 * np.tanh(y[t - 1] * 3) + rng.normal(0, 0.3)
-    return pd.DataFrame({"x": x, "y": y})
+        z[t] = 0.5 * z[t - 1] + rng.normal(0, 1.0)
+        x[t] = 1.2 * np.tanh(z[t - 1]) + rng.normal(0, 0.15)
+        y[t] = 1.0 * np.tanh(z[t - 1] * 0.8) + rng.normal(0, 0.15)
+    return pd.DataFrame({"z": z, "x": x, "y": y})
 
 
 def _random_walk_data(n: int = 300, seed: int = 3) -> pd.DataFrame:
@@ -48,6 +59,24 @@ def _cross_variable_nonlinear_data(n: int = 400, seed: int = 5) -> pd.DataFrame:
     for t in range(1, n):
         x[t] = 0.5 * x[t - 1] + rng.normal(0, 0.3)
         y[t] = 0.3 * y[t - 1] + 1.5 * np.tanh(x[t - 1] * 3) + rng.normal(0, 0.15)
+    return pd.DataFrame({"x": x, "y": y})
+
+
+def _mildly_nonlinear_data(n: int = 3000, seed: int = 9) -> pd.DataFrame:
+    """Termo quadratico pequeno demais para importar na pratica, mas grande sample.
+
+    Calibrado para que um teste de significancia estatistica pura (RESET p-valor)
+    rejeite linearidade (p=0.017 neste fixture) mesmo o termo quadratico sendo
+    pequeno demais para mudar a escolha de algoritmo na pratica -- e exatamente o
+    falso positivo que o criterio de tamanho de efeito (ganho preditivo fora da
+    amostra) deve evitar.
+    """
+    rng = np.random.default_rng(seed)
+    x = np.zeros(n)
+    y = np.zeros(n)
+    for t in range(1, n):
+        x[t] = 0.5 * x[t - 1] + rng.normal(0, 1.0)
+        y[t] = 0.5 * y[t - 1] + 0.5 * x[t - 1] + 0.05 * x[t - 1] ** 2 + rng.normal(0, 1.0)
     return pd.DataFrame({"x": x, "y": y})
 
 
@@ -84,6 +113,15 @@ class ProfileDatasetTests(unittest.TestCase):
         profile = profile_dataset(data)
         by_name = {v.name: v for v in profile.variables}
         self.assertFalse(by_name["y"].linear)
+
+    def test_statistically_detectable_but_practically_negligible_nonlinearity_is_linear(self):
+        # Com n=3000 um teste de p-valor puro rejeitaria linearidade aqui; o criterio
+        # de ganho preditivo fora da amostra nao deve, porque o termo quadratico
+        # praticamente nao reduz o erro de previsao.
+        data = _mildly_nonlinear_data()
+        profile = profile_dataset(data)
+        by_name = {v.name: v for v in profile.variables}
+        self.assertTrue(by_name["y"].linear)
 
     def test_too_short_series_is_marked_untestable_not_guessed(self):
         data = pd.DataFrame({"x": [1.0, 2.0, 3.0]})

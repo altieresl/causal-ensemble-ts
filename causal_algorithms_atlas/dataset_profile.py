@@ -4,14 +4,13 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-import statsmodels.api as sm
-from statsmodels.stats.diagnostic import linear_reset
 from statsmodels.tsa.stattools import adfuller
 
 _STATIONARITY_ALPHA = 0.05
-_LINEARITY_ALPHA = 0.05
 _MIN_OBSERVATIONS_FOR_ADF = 8
-_MIN_OBSERVATIONS_FOR_RESET = 20
+_MIN_OBSERVATIONS_FOR_EFFECT_SIZE = 40
+_NONLINEARITY_EFFECT_SIZE_THRESHOLD = 0.10
+_N_VALIDATION_SPLITS = 4
 
 
 @dataclass(frozen=True)
@@ -22,7 +21,7 @@ class VariableProfile:
     stationary: bool | None
     adf_p_value: float | None
     linear: bool | None
-    reset_p_value: float | None
+    nonlinearity_effect_size: float | None
 
 
 @dataclass(frozen=True)
@@ -72,8 +71,9 @@ class DatasetProfile:
             f"{self.stationary_fraction:.0%} das series testadas sao {stationarity_txt} "
             "(teste ADF, alfa=0.05). "
             f"{self.linear_fraction:.0%} das series testadas tem relacao com o lag 1 de si "
-            f"mesma e das demais variaveis aproximadamente {linearity_txt} "
-            "(teste RESET de Ramsey, alfa=0.05). "
+            f"mesma e das demais variaveis aproximadamente {linearity_txt} (comparando erro "
+            "de previsao fora da amostra entre um modelo linear e um modelo com termos "
+            "quadraticos). "
             "Confundidores latentes nao sao verificaveis apenas a partir dos dados observados "
             "(limite de identificabilidade, nao uma medida deste perfil). "
             "Quais algoritmos de causal discovery sao mais adequados para este perfil?"
@@ -90,27 +90,101 @@ def _adf_p_value(series: pd.Series) -> float | None:
         return None
 
 
-def _reset_p_value_for_target(
+def _expanding_splits(n: int, n_splits: int) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Janelas expansivas (treino cresce, validacao fica adiante) preservando a ordem temporal.
+
+    Mesmo espirito da validacao usada em ``causal_discovery.ensemble_selection.
+    add_predictive_validation_score`` (treino ate uma fracao crescente da amostra,
+    validacao no trecho seguinte) -- reimplementado aqui para nao acoplar
+    ``causal_algorithms_atlas`` a ``causal_discovery`` fora do modulo de ponte
+    dedicado (``ensemble_advisor.py``).
+    """
+    validation_size = max(5, n // 8)
+    splits: list[tuple[np.ndarray, np.ndarray]] = []
+    for fraction in np.linspace(0.5, 0.8, max(1, n_splits)):
+        train_end = max(10, int(n * fraction))
+        validation_end = min(n, train_end + validation_size)
+        if validation_end > train_end:
+            splits.append((np.arange(train_end), np.arange(train_end, validation_end)))
+    return splits
+
+
+def _ridge_mse(
+    train_features: np.ndarray,
+    train_target: np.ndarray,
+    validation_features: np.ndarray,
+    validation_target: np.ndarray,
+    *,
+    alpha: float,
+) -> float | None:
+    """Mesma tecnica de ``causal_discovery.ensemble_selection._ridge_validation_mse``.
+
+    Ridge (nao OLS puro) porque a expansao polinomial de grau 3 sobre todas as
+    variaveis defasadas cria muitos parametros correlacionados; com amostras
+    pequenas, OLS puro sobreajusta e o modelo "nao linear" pode ficar pior fora
+    da amostra mesmo quando a nao linearidade e real -- confirmado empiricamente
+    neste projeto (OLS puro classificava incorretamente uma autodinamica tanh
+    genuina como linear em n=300 por causa disso).
+    """
+    feature_mean = train_features.mean(axis=0)
+    feature_scale = train_features.std(axis=0)
+    feature_scale[feature_scale < 1e-8] = 1.0
+    train_scaled = (train_features - feature_mean) / feature_scale
+    validation_scaled = (validation_features - feature_mean) / feature_scale
+
+    target_mean = float(train_target.mean())
+    try:
+        system = train_scaled.T @ train_scaled + alpha * np.eye(train_scaled.shape[1])
+        coefficients = np.linalg.solve(system, train_scaled.T @ (train_target - target_mean))
+    except Exception:
+        return None
+    prediction = target_mean + validation_scaled @ coefficients
+    return float(np.mean((validation_target - prediction) ** 2))
+
+
+def _out_of_sample_mse(
+    target: np.ndarray,
+    design: np.ndarray,
+    splits: list[tuple[np.ndarray, np.ndarray]],
+    *,
+    ridge_alpha: float = 1.0,
+) -> float | None:
+    errors: list[float] = []
+    for train_index, validation_index in splits:
+        error = _ridge_mse(
+            design[train_index],
+            target[train_index],
+            design[validation_index],
+            target[validation_index],
+            alpha=ridge_alpha,
+        )
+        if error is not None:
+            errors.append(error)
+    return float(np.mean(errors)) if errors else None
+
+
+def _nonlinearity_effect_size_for_target(
     target_column: str, numeric_data: pd.DataFrame
 ) -> float | None:
-    """RESET de Ramsey sobre target[t] ~ const + todas_as_variaveis[t-1].
+    """Ganho relativo de erro fora da amostra ao permitir termos quadraticos.
 
-    Usar apenas a autorregressao da propria variavel (target[t] ~ target[t-1])
-    perderia nao linearidade que so aparece na relacao causal entre variaveis
-    diferentes -- exatamente o que importa para compatibilidade de algoritmo.
-    Por isso o preditor inclui o lag 1 de todas as colunas, nao so da propria.
+    Em vez de testar "existe alguma nao linearidade detectavel" (um teste de
+    significancia como RESET rejeita isso para qualquer desvio, por menor que
+    seja, assim que ha dados suficientes -- confirmado empiricamente neste
+    projeto: RESET rejeitava linearidade em quase todo o dataset real
+    DailyDelhiClimateTrain.csv, deixando so 1 dos 8 metodos do framework como
+    candidato), este teste mede se a nao linearidade e grande o bastante para
+    reduzir o erro de previsao fora da amostra de forma pratica.
 
-    ``power=3`` (nao 2): o RESET com power=2 so adiciona o quadrado do valor
-    ajustado como regressor extra, o que testa apenas desvios de grau par. Uma
-    nao linearidade impar e simetrica como tanh(x) nao tem termo quadratico na
-    expansao de Taylor e passa completamente despercebida em power=2 mesmo com
-    milhares de observacoes -- confirmado empiricamente no toy_b_nonlinear deste
-    projeto (p=0.75 em power=2, p=2e-52 em power=3 para a mesma relacao X1->Y).
-    power=3 adiciona tambem o cubo do valor ajustado, cobrindo esse caso.
+    Retorna ``(mse_linear - mse_quadratico) / mse_linear``: positivo e grande
+    significa que o modelo quadratico prevê bem melhor fora da amostra (a
+    relacao e praticamente nao linear); perto de zero ou negativo significa que
+    permitir curvatura nao ajuda a prever (a relacao e praticamente linear,
+    mesmo que um teste de significancia pura a rejeitasse).
     """
     lagged = numeric_data.shift(1).add_suffix("_lag1")
     frame = pd.concat([numeric_data[[target_column]], lagged], axis=1).dropna()
-    if len(frame) < _MIN_OBSERVATIONS_FOR_RESET:
+    if len(frame) < _MIN_OBSERVATIONS_FOR_EFFECT_SIZE:
         return None
 
     target = frame[target_column].to_numpy(dtype=float)
@@ -120,21 +194,31 @@ def _reset_p_value_for_target(
     if predictors.shape[1] == 0 or np.std(target) < 1e-12:
         return None
 
-    design = sm.add_constant(predictors)
-    try:
-        model = sm.OLS(target, design).fit()
-        result = linear_reset(model, power=3, use_f=True)
-        return float(result.pvalue)
-    except Exception:
+    # Sem intercepto explicito: _ridge_mse centraliza features e alvo internamente.
+    linear_design = predictors
+    # Graus 2 e 3: uma nao linearidade impar e simetrica como tanh(x) nao tem termo
+    # quadratico relevante na expansao de Taylor (mesma licao do RESET power=2 vs
+    # power=3 aplicada aqui) -- so o grau 2 deixaria passar despercebida.
+    nonlinear_design = np.hstack([predictors, predictors**2, predictors**3])
+
+    splits = _expanding_splits(len(frame), _N_VALIDATION_SPLITS)
+    if not splits:
         return None
+
+    linear_mse = _out_of_sample_mse(target, linear_design, splits)
+    nonlinear_mse = _out_of_sample_mse(target, nonlinear_design, splits)
+    if linear_mse is None or nonlinear_mse is None or linear_mse <= 0.0:
+        return None
+
+    return float((linear_mse - nonlinear_mse) / linear_mse)
 
 
 def profile_dataset(data: pd.DataFrame) -> DatasetProfile:
     """Extrai um perfil objetivo (estacionariedade, linearidade) de um dataset.
 
     Nao infere nada que nao seja diretamente testavel a partir dos dados: uma serie
-    curta demais para o teste ADF ou RESET fica com o campo correspondente em None,
-    em vez de assumir um valor default.
+    curta demais para o teste ADF ou para a comparacao preditiva fica com o campo
+    correspondente em None, em vez de assumir um valor default.
     """
     numeric_data = data.apply(pd.to_numeric, errors="coerce")
 
@@ -143,15 +227,19 @@ def profile_dataset(data: pd.DataFrame) -> DatasetProfile:
         series = numeric_data[column]
         adf_p_value = _adf_p_value(series)
         stationary = adf_p_value < _STATIONARITY_ALPHA if adf_p_value is not None else None
-        reset_p_value = _reset_p_value_for_target(column, numeric_data)
-        linear = reset_p_value >= _LINEARITY_ALPHA if reset_p_value is not None else None
+        effect_size = _nonlinearity_effect_size_for_target(column, numeric_data)
+        linear = (
+            effect_size < _NONLINEARITY_EFFECT_SIZE_THRESHOLD
+            if effect_size is not None
+            else None
+        )
         variables.append(
             VariableProfile(
                 name=str(column),
                 stationary=stationary,
                 adf_p_value=adf_p_value,
                 linear=linear,
-                reset_p_value=reset_p_value,
+                nonlinearity_effect_size=effect_size,
             )
         )
 
