@@ -23,6 +23,9 @@ def _tiny_linear_dataset(n: int = 60, seed: int = 7) -> tuple[pd.DataFrame, pd.D
     return data, ground_truth
 
 
+_TWO_CANDIDATES = {"ClassicalGranger", "VARLiNGAM"}
+
+
 class RunExperimentTests(unittest.TestCase):
     def test_runs_end_to_end_and_returns_no_leakage_markers(self):
         data, ground_truth = _tiny_linear_dataset()
@@ -30,10 +33,9 @@ class RunExperimentTests(unittest.TestCase):
             data,
             ground_truth=ground_truth,
             dataset_name="toy_unit_test",
-            candidate_method_names={"ClassicalGranger"},
+            candidate_method_names=_TWO_CANDIDATES,
             n_bootstrap=2,
-            max_methods=1,
-            min_methods=1,
+            max_methods=2,
             random_state=1,
         )
         self.assertEqual(result["dataset_name"], "toy_unit_test")
@@ -42,9 +44,31 @@ class RunExperimentTests(unittest.TestCase):
         self.assertIn("best_combination", result)
         self.assertIn("best_combination_methods", result)
         self.assertIn("best_single_method", result)
+        self.assertIn("single_method_performance_scores", result)
         self.assertIn("best_combination_metrics_post_hoc", result)
         self.assertIn("best_single_metrics_post_hoc", result)
         self.assertTrue(result["ground_truth_used_only_for_post_hoc_evaluation"])
+        self.assertEqual(
+            set(result["single_method_performance_scores"]), _TWO_CANDIDATES
+        )
+
+    def test_single_method_baseline_uses_min_votes_one_not_two(self):
+        # Sob min_votes=2 (o padrao do ensemble), um metodo sozinho nunca teria
+        # nenhuma aresta -- por isso o baseline precisa da sua propria reavaliacao
+        # com min_votes=1, e deve ser capaz de reportar arestas (num_edges > 0
+        # em pelo menos um dos dois candidatos, dado dados lineares claros).
+        data, _ = _tiny_linear_dataset(n=200)
+        result = run_experiment(
+            data,
+            ground_truth=None,
+            dataset_name="toy_unit_test",
+            candidate_method_names=_TWO_CANDIDATES,
+            n_bootstrap=2,
+            max_methods=2,
+            random_state=1,
+        )
+        scores = result["single_method_performance_scores"]
+        self.assertTrue(any(score > 0.0 for score in scores.values()))
 
     def test_writes_history_entry_to_jsonl_file(self):
         data, ground_truth = _tiny_linear_dataset()
@@ -54,10 +78,9 @@ class RunExperimentTests(unittest.TestCase):
                 data,
                 ground_truth=ground_truth,
                 dataset_name="toy_unit_test",
-                candidate_method_names={"ClassicalGranger"},
+                candidate_method_names=_TWO_CANDIDATES,
                 n_bootstrap=2,
-                max_methods=1,
-                min_methods=1,
+                max_methods=2,
                 random_state=1,
                 history_path=history_path,
             )
@@ -72,10 +95,9 @@ class RunExperimentTests(unittest.TestCase):
             data,
             ground_truth=None,
             dataset_name="toy_no_gt",
-            candidate_method_names={"ClassicalGranger"},
+            candidate_method_names=_TWO_CANDIDATES,
             n_bootstrap=2,
-            max_methods=1,
-            min_methods=1,
+            max_methods=2,
             random_state=1,
         )
         self.assertIsNone(result["best_combination_metrics_post_hoc"])

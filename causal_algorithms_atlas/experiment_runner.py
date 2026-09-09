@@ -14,6 +14,7 @@ from causal_algorithms_atlas.ensemble_advisor import (
 )
 from causal_discovery import (
     compute_undirected_skeleton_metrics,
+    evaluate_method_combination,
     select_robust_ensemble_combination,
 )
 
@@ -48,8 +49,9 @@ def run_experiment(
     candidate_method_names: set[str] | None = None,
     max_lag: int = 1,
     n_bootstrap: int = 10,
-    min_methods: int = 1,
+    min_methods: int = 2,
     max_methods: int | None = None,
+    min_votes: int = 2,
     random_state: int = 42,
     history_path: str | Path | None = None,
     prob_threshold: float = 0.5,
@@ -63,6 +65,14 @@ def run_experiment(
     O ground truth, quando fornecido, so e consultado DEPOIS da selecao, para
     relatar o desempenho (``*_metrics_post_hoc``). Sem essa disciplina, qualquer
     afirmacao de que o ensemble supera o melhor metodo individual seria invalida.
+
+    ``min_methods`` comeca em 2 por padrao porque, sob ``min_votes=2`` (o padrao
+    do framework para exigir concordancia entre metodos), uma "combinacao" de um
+    unico metodo nunca produz nenhuma aresta -- min_votes=2 exige 2 votos, e um so
+    metodo da no maximo 1. O baseline de "melhor metodo sozinho" e calculado
+    separadamente aqui, reavaliando cada candidato isolado com ``min_votes=1``
+    (proprio de uma leitura solo, nao de um ensemble) e reaproveitando as
+    execucoes ja computadas -- sem rodar nenhum metodo de novo.
 
     ``candidate_method_names``, quando informado, restringe ainda mais os
     candidatos recomendados pelo perfil -- uso tipico para iteracoes rapidas com
@@ -87,8 +97,9 @@ def run_experiment(
         data,
         candidates,
         method_kwargs=method_kwargs,
-        min_methods=min_methods,
-        max_methods=effective_max_methods,
+        min_methods=max(2, min_methods),
+        max_methods=max(effective_max_methods, max(2, min_methods)),
+        min_votes=min_votes,
         n_bootstrap=n_bootstrap,
         random_state=random_state,
         **selection_kwargs,
@@ -97,18 +108,32 @@ def run_experiment(
     best_combination = selection["best_combination"]
     best_evaluation = selection["best_evaluation"]
 
-    single_rows = ranking[ranking["num_methods"] == 1]
-    if single_rows.empty:
-        best_single_name = None
-        best_single_evaluation = None
-        best_single_performance_score = None
-    else:
-        best_single_row = single_rows.iloc[0]
-        best_single_name = str(best_single_row["combination"])
-        best_single_evaluation = selection["all_evaluations"][best_single_name]
-        best_single_performance_score = float(
-            best_single_evaluation["metrics"]["performance_score"]
+    base_outputs_all = selection["precomputed_outputs"]
+    bootstrap_outputs_all = selection["precomputed_bootstrap_outputs"]
+
+    single_evaluations: dict[str, dict[str, Any]] = {}
+    for name, fn in candidates.items():
+        single_evaluations[name] = evaluate_method_combination(
+            data,
+            {name: fn},
+            method_kwargs={name: {"max_lag": max_lag}},
+            precomputed_outputs={name: base_outputs_all[name]},
+            precomputed_bootstrap_outputs=[
+                {name: iteration[name]} for iteration in bootstrap_outputs_all
+            ],
+            min_votes=1,
+            n_bootstrap=n_bootstrap,
+            random_state=random_state,
         )
+
+    best_single_name = max(
+        single_evaluations,
+        key=lambda name: single_evaluations[name]["metrics"]["performance_score"],
+    )
+    best_single_evaluation = single_evaluations[best_single_name]
+    best_single_performance_score = float(
+        best_single_evaluation["metrics"]["performance_score"]
+    )
 
     best_combination_metrics = _post_hoc_metrics(
         best_evaluation, ground_truth, prob_threshold=prob_threshold
@@ -148,14 +173,19 @@ def run_experiment(
         "config": {
             "max_lag": max_lag,
             "n_bootstrap": n_bootstrap,
-            "min_methods": min_methods,
-            "max_methods": effective_max_methods,
+            "min_methods": max(2, min_methods),
+            "max_methods": max(effective_max_methods, max(2, min_methods)),
+            "min_votes": min_votes,
             "random_state": random_state,
             "candidate_method_names_filter": (
                 sorted(candidate_method_names) if candidate_method_names is not None else None
             ),
         },
         "candidate_methods": sorted(candidates),
+        "single_method_performance_scores": {
+            name: float(evaluation["metrics"]["performance_score"])
+            for name, evaluation in single_evaluations.items()
+        },
         "ranking": ranking.to_dict(orient="records"),
         "best_combination": list(best_combination),
         "best_combination_methods": list(best_combination),
