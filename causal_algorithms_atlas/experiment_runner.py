@@ -19,6 +19,18 @@ from causal_discovery import (
 )
 
 
+class InsufficientCandidatesError(RuntimeError):
+    """Menos de 2 metodos sobreviveram ao filtro de perfil -- ensemble impossivel.
+
+    Nao e um erro de implementacao: significa que, dentre os metodos VERIFIED do
+    atlas implementados no framework, no maximo um e compativel com as premissas
+    objetivas deste dataset (ex.: dataset predominantemente nao linear, e so um
+    metodo do framework nao assume linearidade). Reportar isso explicitamente e
+    preferivel a formar um "ensemble" de um metodo so ou a afrouxar o filtro so
+    para conseguir uma comparacao.
+    """
+
+
 def _post_hoc_metrics(
     evaluation: dict[str, Any],
     ground_truth: pd.DataFrame | None,
@@ -85,9 +97,17 @@ def run_experiment(
         candidates = {
             name: fn for name, fn in candidates.items() if name in candidate_method_names
         }
-    if not candidates:
-        raise ValueError(
-            "Nenhum metodo candidato disponivel para este dataset apos o filtro de perfil."
+    if len(candidates) < 2:
+        excluded = [
+            f"{rec.framework_method_name} ({'; '.join(rec.reasons)})"
+            for rec in recommendations
+            if not rec.included
+        ]
+        raise InsufficientCandidatesError(
+            f"Apenas {len(candidates)} metodo(s) do framework sao compativeis com o "
+            f"perfil deste dataset ({dataset_name}): {sorted(candidates)}. Um ensemble "
+            "precisa de pelo menos 2 metodos concordando (min_votes>=2). Metodos "
+            f"excluidos e motivo: {excluded}"
         )
 
     effective_max_methods = max_methods if max_methods is not None else len(candidates)

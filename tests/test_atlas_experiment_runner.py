@@ -8,7 +8,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from causal_algorithms_atlas.experiment_runner import run_experiment
+from causal_algorithms_atlas.experiment_runner import (
+    InsufficientCandidatesError,
+    run_experiment,
+)
 
 
 def _tiny_linear_dataset(n: int = 60, seed: int = 7) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -102,6 +105,18 @@ class RunExperimentTests(unittest.TestCase):
         )
         self.assertIsNone(result["best_combination_metrics_post_hoc"])
         self.assertIsNone(result["best_single_metrics_post_hoc"])
+
+    def test_raises_clear_error_when_fewer_than_two_candidates_survive_filter(self):
+        data, _ = _tiny_linear_dataset()
+        with self.assertRaises(InsufficientCandidatesError):
+            run_experiment(
+                data,
+                ground_truth=None,
+                dataset_name="toy_single_candidate",
+                candidate_method_names={"NeuralGrangercMLP"},
+                n_bootstrap=2,
+                random_state=1,
+            )
 
 
 if __name__ == "__main__":
