@@ -75,8 +75,6 @@ Comandos úteis:
 
 - `python -m pytest tests/test_atlas_content.py -v` — confere que todo método
   registrado no framework tem ficha `verified` no atlas.
-- `python -m causal_algorithms_atlas.eda` — gera gráficos (HTML) descrevendo a
-  cobertura da base por família de algoritmo e por premissa.
 - `python -m causal_algorithms_atlas.rag_chat "pergunta"` — consulta de debug via RAG
   (TF-IDF + Ollama local, modelo `llama3.1:8b`) para inspecionar manualmente a
   recuperação antes de qualquer uso mais sério.

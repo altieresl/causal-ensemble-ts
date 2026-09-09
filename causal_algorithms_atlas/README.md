@@ -14,7 +14,6 @@ causal_algorithms_atlas/
     validate.py     # validacao cruzada (referencias, alinhamento com o framework)
     export.py       # exporta fichas para chunks JSONL (uso em RAG)
     evidence.py     # parse de evidence/*.yaml (resultados empiricos)
-    eda.py          # graficos de cobertura da base (familia, premissas)
     rag_chat.py      # chat de debug: TF-IDF + Llama local via Ollama
     algorithms/      # uma ficha .md por algoritmo
     evidence/        # resultados empiricos medidos neste projeto, por algoritmo+dataset
@@ -32,7 +31,7 @@ nunca ficam no mesmo arquivo.
 Rodar a suíte de testes do atlas:
 
 ```bash
-python -m pytest tests/test_atlas_schema.py tests/test_atlas_loader.py tests/test_atlas_validate.py tests/test_atlas_content.py tests/test_atlas_export.py tests/test_atlas_evidence.py tests/test_atlas_eda.py tests/test_atlas_rag_chat.py -v
+python -m pytest tests/test_atlas_schema.py tests/test_atlas_loader.py tests/test_atlas_validate.py tests/test_atlas_content.py tests/test_atlas_export.py tests/test_atlas_evidence.py tests/test_atlas_rag_chat.py -v
 ```
 
 Conferir que todo método registrado em `causal_discovery` tem ficha `verified` no atlas:
@@ -40,15 +39,6 @@ Conferir que todo método registrado em `causal_discovery` tem ficha `verified` 
 ```bash
 python -m pytest tests/test_atlas_content.py -v
 ```
-
-Gerar os gráficos de cobertura da base (família de algoritmo, premissas):
-
-```bash
-python -m causal_algorithms_atlas.eda
-```
-
-Isso salva `family_counts.html` e `assumption_coverage.html` em
-`causal_algorithms_atlas/eda_output/` (gerado, não versionado — abra no navegador).
 
 ## Como rodar o chat RAG de debug
 

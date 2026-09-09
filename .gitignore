@@ -45,8 +45,6 @@ Thumbs.db
 # Local (non-versioned)
 .local/
 
-# Causal algorithms atlas generated output
-causal_algorithms_atlas/eda_output/
 
 # Agent instruction file
 AGENTS.md
