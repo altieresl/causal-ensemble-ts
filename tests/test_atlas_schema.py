@@ -37,7 +37,7 @@ def _make_card(**overrides):
         verification=VerificationStatus.DRAFT,
         verified_by=None,
         last_reviewed="2026-09-07",
-        sections={"Ideia central": "texto"},
+        sections={"Core idea": "texto"},
         source_path="causal_algorithms_atlas/algorithms/toy_method.md",
     )
     defaults.update(overrides)

@@ -8,10 +8,10 @@ output_type: partial-graph
 assumptions:
   - id: causal_sufficiency
     required: true
-    statement: "Ausencia de confundidores latentes nao medidos."
+    statement: "Absence of relevant unmeasured latent confounders."
   - id: faithfulness
     required: true
-    statement: "Independencias observadas refletem a estrutura causal, nao coincidencia."
+    statement: "Observed independencies reflect the causal structure, not coincidence."
 handles_latent_confounders: false
 handles_nonlinearity: false
 handles_contemporaneous_effects: true
@@ -24,43 +24,47 @@ framework_method_name: null
 references: [spirtes1991, colombo2014]
 verification: verified
 verified_by: "paper-cross-check"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-PC (Spirtes & Glymour, 1991) recupera a classe de equivalencia de Markov de um grafo
-causal removendo iterativamente arestas entre pares de variaveis que se mostram
-condicionalmente independentes dado algum subconjunto das demais variaveis, comecando
-por conjuntos vazios e crescendo o tamanho do conjunto condicionante. O resultado e um
-CPDAG (grafo parcialmente orientado que representa toda a classe de equivalencia), nao
-um DAG unico. PC-stable (Colombo & Maathuis, 2014) e uma modificacao que remove a
-dependencia da ordem em que as variaveis sao apresentadas ao algoritmo, tornando o
-resultado do skeleton estavel sob reordenacao.
+PC (Spirtes & Glymour, 1991) recovers the Markov equivalence class of a causal graph
+by iteratively removing edges between pairs of variables that test conditionally
+independent given some subset of the remaining variables, starting from empty sets and
+growing the conditioning-set size. The result is a CPDAG (a partially oriented graph
+representing the whole equivalence class), not a single DAG. PC-stable (Colombo &
+Maathuis, 2014) is a modification that removes the dependence on the order in which
+variables are presented to the algorithm, making the skeleton result stable under
+reordering.
 
-## Premissas
+## Assumptions
 
-Suficiencia causal (nenhum confundidor latente relevante) e fidelidade causal — as
-mesmas premissas fortes de GES. E um algoritmo geral para dados tabulares/i.i.d., sem
-nocao nativa de tempo.
+- **Stationarity: not applicable.** PC has no native notion of time (see "When to
+  avoid").
+- **Linearity: not required by the general formulation**, though the independence test
+  chosen in practice determines whether the tested dependency is linear.
+- **Causal sufficiency: REQUIRED.** No relevant unmeasured latent confounders.
+- **Faithfulness: REQUIRED.** Observed independencies must reflect the true causal
+  structure.
 
-## Quando usar
+## When to use
 
-Como algoritmo de referencia da familia constraint-based quando se aceita as premissas
-fortes (suficiencia causal) e se precisa de uma alternativa mais simples e mais barata
-computacionalmente que PCMCI para dados sem estrutura temporal, ou como baseline
-conceitual ao comparar com FCI (a versao que relaxa suficiencia causal).
+As the reference constraint-based algorithm when the strong assumptions (causal
+sufficiency) are acceptable and a simpler, computationally cheaper alternative to
+PCMCI is needed for data without temporal structure, or as a conceptual baseline when
+comparing against FCI (the version that relaxes causal sufficiency).
 
-## Quando evitar
+## When to avoid
 
-Para series temporais, PC nao tem tratamento nativo do tempo: aplicá-lo exige o mesmo
-tipo de desenrolamento em matriz temporal usado no framework para GES e FCI, o que nao
-esta implementado aqui. A ordem original de PC tambem e sensivel a ordem das variaveis
-de entrada — PC-stable resolve especificamente esse problema.
+For time series, PC has no native time handling: applying it requires the same kind of
+temporal-matrix unrolling used in this framework for GES and FCI, which is not
+implemented here. The original PC ordering is also sensitive to input variable order --
+PC-stable specifically fixes that problem.
 
-## Relação com outros métodos
+## Relationship to other methods
 
-E o predecessor conceitual de GES (busca por score em vez de testes de independencia)
-e de FCI (que relaxa a suficiencia causal de PC). PCMCI usa uma logica de selecao de
-condicionantes que lembra a fase de skeleton de PC, mas adaptada nativamente ao caso
-temporal com o teste MCI.
+It is the conceptual predecessor of GES (score search instead of independence tests)
+and of FCI (which relaxes PC's causal sufficiency). PCMCI uses a condition-selection
+logic reminiscent of PC's skeleton phase, but natively adapted to the temporal case
+with the MCI test.

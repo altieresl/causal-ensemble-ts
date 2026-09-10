@@ -8,13 +8,13 @@ output_type: signed-graph
 assumptions:
   - id: causal_sufficiency
     required: true
-    statement: "Ausencia de confundidores latentes nao medidos."
+    statement: "Absence of relevant unmeasured latent confounders."
   - id: acyclicity_instantaneous
     required: true
-    statement: "O grafo buscado e aciclico, imposto via restricao continua suave (caracterizacao por traco de exponencial de matriz)."
+    statement: "The target graph is acyclic, enforced via a smooth continuous constraint (matrix-exponential trace characterization)."
   - id: linearity
     required: true
-    statement: "Formulacao original assume relacoes lineares entre variaveis; extensoes nao lineares existem mas nao sao cobertas por esta ficha."
+    statement: "The original formulation assumes linear relationships between variables; nonlinear extensions exist but are not covered by this card."
 handles_latent_confounders: false
 handles_nonlinearity: false
 handles_contemporaneous_effects: true
@@ -27,38 +27,42 @@ framework_method_name: null
 references: [zheng2018]
 verification: verified
 verified_by: "paper-cross-check"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-NOTEARS reformula a busca combinatoria por um DAG (que escala superexponencialmente
-com o numero de variaveis) como um problema de otimizacao continua sobre matrizes
-reais, usando uma caracterizacao suave e exata de aciclicidade baseada no traco da
-exponencial da matriz de adjacencia. Isso permite usar algoritmos numericos padrao em
-vez de heuristicas combinatorias de busca de estrutura.
+NOTEARS (Zheng et al., 2018) reformulates the combinatorial search for a DAG (which
+scales super-exponentially with the number of variables) as a continuous optimization
+problem over real-valued matrices, using a smooth, exact acyclicity characterization
+based on the trace of the matrix exponential of the adjacency matrix. This allows
+standard numerical solvers to replace combinatorial structure-search heuristics.
 
-## Premissas
+## Assumptions
 
-Formulacao original assume relacoes lineares e ausencia de confundidor latente
-(suficiencia causal), com aciclicidade garantida explicitamente pela restricao de
-otimizacao, nao apenas assumida a priori.
+- **Stationarity: not applicable.** NOTEARS is not natively temporal (see "When to
+  avoid").
+- **Linearity: REQUIRED (original formulation).** Nonlinear extensions exist but are
+  not covered by this card.
+- **Acyclicity (instantaneous): REQUIRED.** Guaranteed explicitly by the optimization
+  constraint, not merely assumed a priori.
+- **Causal sufficiency: REQUIRED.** Absence of relevant unmeasured latent confounders.
 
-## Quando usar
+## When to use
 
-Como base conceitual antes de considerar DYNOTEARS: util para dados i.i.d.
-(nao-temporais) ou como comparacao teorica ao explicar de onde vem a restricao de
-aciclicidade continua usada em DYNOTEARS.
+As a conceptual foundation before considering DYNOTEARS: useful for i.i.d.
+(non-temporal) data, or as a theoretical comparison when explaining where DYNOTEARS'
+continuous acyclicity constraint comes from.
 
-## Quando evitar
+## When to avoid
 
-Para series temporais diretamente: NOTEARS original nao modela lags, apenas a
-estrutura instantanea entre variaveis observadas em um unico instante (ou linhas i.i.d.
-de um dataset tabular). DYNOTEARS e a extensao que trata explicitamente a dimensao
-temporal.
+Directly for time series: the original NOTEARS does not model lags, only the
+instantaneous structure between variables observed at a single instant (or i.i.d. rows
+of a tabular dataset). DYNOTEARS is the extension that explicitly handles the temporal
+dimension.
 
-## Relação com outros métodos
+## Relationship to other methods
 
-E o ancestral direto e nao temporal de DYNOTEARS, ja implementado no framework: DYNOTEARS
-adiciona a matriz de coeficientes lagged a mesma formulacao de otimizacao continua com
-restricao suave de aciclicidade sobre a parte instantanea.
+It is the direct, non-temporal ancestor of DYNOTEARS, already implemented in the
+framework: DYNOTEARS adds the lagged coefficient matrix to the same continuous
+optimization formulation with a smooth acyclicity constraint on the instantaneous part.

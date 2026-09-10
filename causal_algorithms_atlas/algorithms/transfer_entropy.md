@@ -8,7 +8,7 @@ output_type: signed-graph
 assumptions:
   - id: markov_condition
     required: true
-    statement: "O processo pode ser bem aproximado por uma cadeia de Markov de ordem finita para estimar as distribuicoes condicionais envolvidas."
+    statement: "The process can be well approximated by a finite-order Markov chain for estimating the involved conditional distributions."
 handles_latent_confounders: false
 handles_nonlinearity: true
 handles_contemporaneous_effects: false
@@ -21,39 +21,42 @@ framework_method_name: null
 references: [schreiber2000]
 verification: verified
 verified_by: "paper-cross-check"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-Transfer entropy mede o quanto o passado de uma serie `X` reduz a incerteza sobre o
-estado futuro de `Y`, alem do que o proprio passado de `Y` ja reduz — uma
-generalizacao nao parametrica e nao linear da nocao de causalidade de Granger baseada
-em teoria da informacao (entropia condicional) em vez de erro de previsao linear.
+Transfer entropy (Schreiber, 2000) measures how much the past of a series `X` reduces
+uncertainty about the future state of `Y`, beyond what `Y`'s own past already reduces --
+a nonparametric, nonlinear generalization of the Granger-causality notion based on
+information theory (conditional entropy) instead of linear forecast error.
 
-## Premissas
+## Assumptions
 
-Nao assume forma funcional (linear ou nao) entre as series, mas exige que as
-distribuicoes condicionais envolvidas sejam estimaveis a partir dos dados, o que na
-pratica assume que o processo e razoavelmente bem descrito por uma cadeia de Markov de
-ordem finita e demanda volume de dados suficiente para estimar entropia condicional
-com confiabilidade (a estimacao de entropia e notoriamente sensivel ao tamanho da
-amostra e a discretizacao/kernel usados).
+- **Stationarity: not declared as a formal precondition**, though estimating stable
+  conditional distributions in practice benefits from a reasonably stationary process.
+- **Linearity: NOT required.** It makes no assumption about functional form (linear or
+  otherwise) between series.
+- **Markov condition: REQUIRED.** The process must be well approximated by a
+  finite-order Markov chain so the conditional distributions involved are estimable
+  from data, which in practice demands enough data volume for reliable conditional
+  entropy estimation (entropy estimation is notoriously sensitive to sample size and to
+  the discretization/kernel used).
 
-## Quando usar
+## When to use
 
-Quando a relacao entre series e fortemente nao linear e nenhuma forma funcional
-especifica pode ser assumida a priori, e ha dados suficientes para estimar densidades
-ou entropias condicionais com confianca.
+When the relationship between series is strongly nonlinear and no specific functional
+form can be assumed a priori, and there is enough data to estimate densities or
+conditional entropies with confidence.
 
-## Quando evitar
+## When to avoid
 
-Com poucas observacoes: a estimacao de transfer entropy exige mais dados que testes
-parametricos como Granger classico para obter a mesma confiabilidade estatistica, dado
-que depende de estimar distribuicoes condicionais em vez de ajustar poucos parametros.
+With few observations: estimating transfer entropy requires more data than parametric
+tests like classical Granger to reach the same statistical reliability, since it
+depends on estimating conditional distributions rather than fitting a few parameters.
 
-## Relação com outros métodos
+## Relationship to other methods
 
-Ocupa o mesmo papel conceitual que Neural Granger cMLP no framework (generalizacao nao
-linear da nocao de causalidade de Granger), mas por uma rota nao parametrica baseada em
-teoria da informacao em vez de uma rede neural com penalizacao estruturada.
+Occupies the same conceptual role as Neural Granger cMLP in the framework (nonlinear
+generalization of the Granger-causality notion), but via a nonparametric,
+information-theoretic route instead of a neural network with structured penalization.

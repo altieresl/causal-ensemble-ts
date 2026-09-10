@@ -8,10 +8,10 @@ output_type: pag
 assumptions:
   - id: stationarity
     required: true
-    statement: "Processo causalmente estacionario: a relacao causal entre variaveis em instantes diferentes nao muda ao longo do tempo."
+    statement: "Causally stationary process: the causal relationship between variables at different time points does not change over time."
   - id: faithfulness
     required: true
-    statement: "Independencias observadas refletem a estrutura causal, nao coincidencia."
+    statement: "Observed independencies reflect the causal structure, not coincidence."
 handles_latent_confounders: true
 handles_nonlinearity: false
 handles_contemporaneous_effects: true
@@ -24,41 +24,46 @@ framework_method_name: null
 references: [entner2010, malinsky2018]
 verification: verified
 verified_by: "paper-cross-check"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-tsFCI (Entner & Hoyer, 2010) adapta o FCI a series temporais causalmente estacionarias,
-orientando por padrao as arestas defasadas com um circulo em uma extremidade (valido
-porque um efeito nao pode preceder sua causa), mas permitindo confundimento latente
-entre variaveis defasadas e contemporaneas. SVAR-FCI (Malinsky & Spirtes, 2018) e uma
-adaptacao posterior que usa a suposicao de estacionariedade de forma mais agressiva,
-removendo automaticamente arestas adicionais entre variaveis defasadas e contemporaneas
-em todos os instantes de tempo sempre que a independencia correspondente e detectada,
-produzindo um PAG mais informativo que o de tsFCI sob as mesmas premissas.
+tsFCI (Entner & Hoyer, 2010) adapts FCI to causally stationary time series, by default
+orienting lagged edges with a circle mark on one end (valid because an effect cannot
+precede its cause), while allowing latent confounding between lagged and contemporaneous
+variables. SVAR-FCI (Malinsky & Spirtes, 2018) is a later adaptation that uses the
+stationarity assumption more aggressively, automatically removing additional edges
+between lagged and contemporaneous variables across all time points whenever the
+corresponding independence is detected, producing a more informative PAG than tsFCI
+under the same assumptions.
 
-## Premissas
+## Assumptions
 
-Estacionariedade causal e fidelidade — nao exigem suficiencia causal, que e a
-motivacao central de ambos frente a uma adaptacao temporal de PC.
+- **Stationarity: REQUIRED (causal stationarity).**
+- **Linearity: NOT required by the general formulation** (depends on the
+  conditional-independence test chosen in practice).
+- **Causal sufficiency: NOT required.** This is the central motivation of both methods
+  relative to a temporal adaptation of PC.
+- **Faithfulness: REQUIRED.** Observed independencies must reflect the true causal
+  structure.
 
-## Quando usar
+## When to use
 
-Quando ha suspeita de confundidor latente em uma serie temporal e se aceita saida
-parcialmente orientada (PAG); SVAR-FCI e preferivel a tsFCI quando a estacionariedade
-completa e uma suposicao defensavel, pois produz uma saida mais informativa sob essa
-suposicao mais forte.
+When a latent confounder is suspected in a time series and a partially oriented output
+(PAG) is acceptable; SVAR-FCI is preferable to tsFCI when full stationarity is a
+defensible assumption, since it produces a more informative output under that stronger
+assumption.
 
-## Quando evitar
+## When to avoid
 
-Quando a estacionariedade causal completa for implausivel (mudanca de regime na
-relacao causal ao longo do tempo) — SVAR-FCI em particular depende dessa suposicao para
-as remocoes de aresta adicionais.
+When full causal stationarity is implausible (a regime change in the causal
+relationship over time) -- SVAR-FCI in particular depends on this assumption for its
+additional edge removals.
 
-## Relação com outros métodos
+## Relationship to other methods
 
-Ocupam o mesmo nicho que LPCMCI (tolerar confundidor latente, saida PAG), mas dentro da
-familia FCI/PC classica em vez do teste MCI do Tigramite; e o analogo temporal direto
-de FCI, da mesma forma que PCMCI+ e LPCMCI sao extensoes temporais nativas da familia
-PC/MCI.
+They occupy the same niche as LPCMCI (tolerating latent confounders, PAG output), but
+within the classical FCI/PC family rather than Tigramite's MCI test; it is the direct
+temporal analogue of FCI, the same way PCMCI+ and LPCMCI are natively temporal
+extensions of the PC/MCI family.

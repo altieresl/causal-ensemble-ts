@@ -8,13 +8,13 @@ output_type: dag
 assumptions:
   - id: causal_sufficiency
     required: true
-    statement: "Ausencia de confundidores latentes nao medidos."
+    statement: "Absence of relevant unmeasured latent confounders."
   - id: faithfulness
     required: true
-    statement: "Independencias observadas refletem a estrutura causal, nao coincidencia."
+    statement: "Observed independencies reflect the causal structure, not coincidence."
   - id: linearity
     required: true
-    statement: "O wrapper do framework usa o score local_score_BIC (BIC gaussiano) por padrao, o que assume relacoes lineares com residuos gaussianos."
+    statement: "The framework's wrapper uses the local_score_BIC score (Gaussian BIC) by default, which assumes linear relationships with Gaussian residuals."
 handles_latent_confounders: false
 handles_nonlinearity: false
 handles_contemporaneous_effects: true
@@ -27,43 +27,48 @@ framework_method_name: "GES"
 references: [chickering2002]
 verification: verified
 verified_by: "paper-cross-check+source-code"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-GES e um algoritmo geral (nao temporal) que busca greedy em duas fases (forward,
-adicionando arestas; backward, removendo) sobre o espaco de classes de equivalencia de
-Markov, otimizando um score (por padrao, BIC) ate atingir um otimo local que a teoria
-garante ser a estrutura correta quando as premissas valem e os dados sao suficientes.
+GES (Chickering, 2002) is a general (non-temporal) algorithm that performs a
+two-phase greedy search (forward, adding edges; backward, removing them) over the
+space of Markov equivalence classes, optimizing a score (BIC by default) until it
+reaches a local optimum that theory guarantees is the correct structure when the
+assumptions hold and enough data is available.
 
-## Premissas
+## Assumptions
 
-Suficiencia causal e fidelidade — heranca do algoritmo geral, nao especifico ao caso
-temporal. Ao ser adaptado para series no framework, o score usado assume forma
-funcional compativel com BIC gaussiano.
+- **Stationarity: NOT required.** No stationarity precondition is declared.
+- **Linearity: REQUIRED (in this framework's configuration).** The score used
+  (Gaussian BIC) assumes a functional form compatible with linear relationships and
+  Gaussian residuals.
+- **Causal sufficiency: REQUIRED.** Inherited from the general (non-temporal)
+  algorithm.
+- **Faithfulness: REQUIRED.** Observed independencies must reflect the true causal
+  structure.
 
-## Quando usar
+## When to use
 
-Como candidato adicional ao lado dos metodos temporais nativos (PCMCI, LPCMCI), para
-capturar estrutura que uma busca por score pode encontrar e uma busca baseada em
-restricoes pode perder, especialmente com poucas variaveis onde a busca greedy e
-barata.
+As an additional candidate alongside natively temporal methods (PCMCI, LPCMCI), to
+capture structure that a score-based search may find and a constraint-based search may
+miss, especially with few variables where the greedy search is cheap.
 
-## Quando evitar
+## When to avoid
 
-GES e FCI sao algoritmos gerais para dados tabulares, nao desenhados para series
-temporais. Nao devem ser tratados como algoritmos temporalmente estacionarios como
-PCMCI apenas por terem sido adaptados.
+GES and FCI are general algorithms for tabular data, not designed for time series.
+They should not be treated as stationarity-aware temporal algorithms like PCMCI just
+because they have been adapted.
 
-## Relação com outros métodos
+## Relationship to other methods
 
-No framework, GES e FCI recebem a mesma adaptacao: uma matriz desenrolada no tempo
-(`variavel_t`, `variavel_lag_1`, ...), e a conversao de volta ao contrato temporal
-considera apenas relacoes entre uma variavel defasada e uma variavel atual. Arestas nao
-orientadas entre passado e presente sao orientadas pela ordem temporal conhecida.
+In the framework, GES and FCI receive the same adaptation: a matrix unrolled in time
+(`variable_t`, `variable_lag_1`, ...), and the conversion back to the temporal
+contract only considers relationships between a lagged variable and a current one.
+Unoriented edges between past and present are oriented by the known temporal order.
 
-## Notas de implementação
+## Implementation notes
 
-Wrapper em `causal_discovery/methods/causal_learn.py`, usando o GES oficial do pacote
-`causal-learn` sobre a matriz temporal expandida.
+Wrapper in `causal_discovery/methods/causal_learn.py`, using the official GES from the
+`causal-learn` package over the expanded temporal matrix.

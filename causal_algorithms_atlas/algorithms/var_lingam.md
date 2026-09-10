@@ -8,13 +8,13 @@ output_type: signed-graph
 assumptions:
   - id: linearity
     required: true
-    statement: "Relacoes lagged e instantaneas lineares."
+    statement: "Linear lagged and instantaneous relationships."
   - id: acyclicity_instantaneous
     required: true
-    statement: "Estrutura instantanea (lag 0) e aciclica."
+    statement: "The instantaneous (lag 0) structure is acyclic."
   - id: non_gaussian_errors
     required: true
-    statement: "Ruidos independentes e nao gaussianos."
+    statement: "Independent, non-Gaussian noise terms."
 handles_latent_confounders: false
 handles_nonlinearity: false
 handles_contemporaneous_effects: true
@@ -27,41 +27,46 @@ framework_method_name: "VARLiNGAM"
 references: [hyvarinen2010]
 verification: verified
 verified_by: "paper-cross-check+source-code"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-Combina um modelo VAR (Vector Autoregression) para a parte lagged com LiNGAM (Linear
-Non-Gaussian Acyclic Model) para orientar a estrutura instantanea (lag 0). A
-nao-gaussianidade dos residuos e o que permite identificar a direcao causal instantanea
-sem depender apenas de restricoes de independencia condicional.
+Combines a VAR (Vector Autoregression) model for the lagged part with LiNGAM (Linear
+Non-Gaussian Acyclic Model) to orient the instantaneous (lag 0) structure (Hyvärinen et
+al., 2010). Non-Gaussianity of the residuals is what allows the instantaneous causal
+direction to be identified without relying solely on conditional-independence
+constraints.
 
-## Premissas
+## Assumptions
 
-Linearidade em todas as relacoes (lagged e instantaneas), aciclicidade da estrutura
-instantanea, e residuos independentes e nao gaussianos — se os residuos forem
-gaussianos, a orientacao instantanea deixa de ser identificavel pela teoria do metodo.
+- **Stationarity: NOT required.** The method does not declare stationarity as a
+  precondition.
+- **Linearity: REQUIRED.** Both lagged and instantaneous relationships must be linear.
+- **Acyclicity (instantaneous): REQUIRED.** The lag-0 structure must be acyclic.
+- **Non-Gaussian errors: REQUIRED.** Residuals must be independent and non-Gaussian --
+  if they were Gaussian, the instantaneous orientation would no longer be identifiable
+  under the method's theory.
 
-## Quando usar
+## When to use
 
-Quando ha efeitos instantaneos (lag 0) plausiveis entre as series e razao para acreditar
-que os residuos nao sao gaussianos (comum em dados financeiros e alguns sensores
-fisicos).
+When plausible instantaneous (lag 0) effects exist between the series and there is
+reason to believe residuals are non-Gaussian (common in financial data and some
+physical sensors).
 
-## Quando evitar
+## When to avoid
 
-Com residuos proximos de gaussianos ou quando se suspeita de ciclos na estrutura
-instantanea: a identificacao de LiNGAM depende estruturalmente da nao-gaussianidade e
-da aciclicidade.
+With near-Gaussian residuals, or when instantaneous cycles are suspected: LiNGAM's
+identifiability depends structurally on non-Gaussianity and on acyclicity.
 
-## Relação com outros métodos
+## Relationship to other methods
 
-E o unico metodo do ensemble que modela explicitamente efeitos instantaneos (lag 0)
-alem dos lagged, o que o torna complementar a PCMCI e DYNOTEARS, que tratam
-majoritariamente ou exclusivamente relacoes lagged.
+It is the only method in the ensemble that explicitly models instantaneous (lag 0)
+effects in addition to lagged ones, which makes it complementary to PCMCI and
+DYNOTEARS, which mostly or exclusively handle lagged relationships.
 
-## Notas de implementação
+## Implementation notes
 
-Wrapper em `causal_discovery/methods/var_lingam.py`, usando `lingam.VARLiNGAM`, incluindo
-efeitos instantaneos e lagged. `signed_score=True` no registro do framework.
+Wrapper in `causal_discovery/methods/var_lingam.py`, using `lingam.VARLiNGAM`,
+including both instantaneous and lagged effects. `signed_score=True` in the framework
+registry.

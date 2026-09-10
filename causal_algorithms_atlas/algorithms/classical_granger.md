@@ -8,10 +8,10 @@ output_type: signed-graph
 assumptions:
   - id: stationarity
     required: true
-    statement: "Series estacionarias (ou tornadas estacionarias por diferenciacao previa)."
+    statement: "Stationary series (or made stationary via prior differencing)."
   - id: linearity
     required: true
-    statement: "Relacao preditiva linear entre os lags e o alvo."
+    statement: "Linear predictive relationship between the lags and the target."
 handles_latent_confounders: false
 handles_nonlinearity: false
 handles_contemporaneous_effects: false
@@ -24,41 +24,44 @@ framework_method_name: "ClassicalGranger"
 references: [granger1969]
 verification: verified
 verified_by: "paper-cross-check+source-code"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-Testa se os valores passados de uma serie `X` melhoram a previsao linear de outra
-serie `Y` alem do que os proprios valores passados de `Y` ja explicam. E um teste
-bivariado e estritamente preditivo: "causa" aqui significa "tem poder preditivo
-incremental", nao causalidade estrutural no sentido de intervencao.
+Tests whether the past values of a series `X` improve the linear forecast of another
+series `Y` beyond what `Y`'s own past already explains (Granger, 1969). It is a
+bivariate, strictly predictive test: "causes" here means "has incremental predictive
+power," not structural causality in the interventionist sense.
 
-## Premissas
+## Assumptions
 
-Estacionariedade das series e uma forma funcional linear entre lags e alvo. O teste
-conjunto usado no wrapper considera todos os lags simultaneamente, mas a significancia
-de cada coeficiente individual e reportada separadamente.
+- **Stationarity: REQUIRED.** The series must be stationary (or made stationary through
+  prior differencing) for the underlying VAR framework and its F-test to be valid.
+- **Linearity: REQUIRED.** The predictive relationship between lags and target is
+  assumed linear; the framework's wrapper runs a joint test over all lags at once, but
+  reports the significance of each individual coefficient separately.
 
-## Quando usar
+## When to use
 
-Como baseline rapido e interpretavel, ou quando a relacao realmente e bivariada e
-aproximadamente linear. Boa referencia de comparacao para os metodos multivariados do
-ensemble.
+As a fast, interpretable baseline, or when the relationship really is bivariate and
+approximately linear. A good comparison reference for the ensemble's multivariate
+methods.
 
-## Quando evitar
+## When to avoid
 
-Quando ha confundidores comuns entre `X` e `Y` que nao entram no teste bivariado: nesse
-caso, causalidade de Granger bivariada pode indicar uma relacao espuria induzida pelo
-confundidor. Tambem inadequado se a relacao for genuinamente nao linear.
+When there are common confounders between `X` and `Y` that do not enter the bivariate
+test: in that case, bivariate Granger causality can flag a spurious relationship
+induced by the confounder. Also unsuitable when the relationship is genuinely
+nonlinear.
 
-## Relação com outros métodos
+## Relationship to other methods
 
-E o fundamento historico de toda a familia "Granger-based" do projeto, incluindo Neural
-Granger cMLP, que generaliza o teste para relacoes nao lineares multivariadas com uma
-rede por alvo.
+It is the historical foundation of the whole "Granger-based" family in this project,
+including Neural Granger cMLP, which generalizes the test to multivariate nonlinear
+relationships with one network per target.
 
-## Notas de implementação
+## Implementation notes
 
-Wrapper em `causal_discovery/methods/classical_granger.py`, usando o teste de
-causalidade de Granger do Statsmodels. `signed_score=True` no registro do framework.
+Wrapper in `causal_discovery/methods/classical_granger.py`, using Statsmodels' Granger
+causality test. `signed_score=True` in the framework registry.

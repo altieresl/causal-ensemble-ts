@@ -18,11 +18,11 @@ from causal_algorithms_atlas.schema import (
 )
 
 REQUIRED_SECTIONS: tuple[str, ...] = (
-    "Ideia central",
-    "Premissas",
-    "Quando usar",
-    "Quando evitar",
-    "Relação com outros métodos",
+    "Core idea",
+    "Assumptions",
+    "When to use",
+    "When to avoid",
+    "Relationship to other methods",
 )
 
 _FRONTMATTER_PATTERN = re.compile(r"\A---\s*\n(.*?)\n---\s*\n(.*)", re.DOTALL)

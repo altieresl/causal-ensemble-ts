@@ -8,7 +8,7 @@ output_type: unsigned-graph
 assumptions:
   - id: deterministic_dynamics
     required: true
-    statement: "O sistema segue uma dinamica deterministica de baixa dimensionalidade, reconstruivel via embedding de Takens (nao dominada por ruido estocastico)."
+    statement: "The system follows low-dimensional deterministic dynamics, reconstructible via Takens embedding (not dominated by stochastic noise)."
 handles_latent_confounders: false
 handles_nonlinearity: true
 handles_contemporaneous_effects: false
@@ -21,42 +21,44 @@ framework_method_name: null
 references: [sugihara2012]
 verification: verified
 verified_by: "paper-cross-check"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-CCM parte da teoria de sistemas dinamicos (embedding de Takens): se `X` causa `Y` em
-um sistema dinamico acoplado, entao informacao sobre o estado de `X` fica impressa no
-atrator reconstruido de `Y`, permitindo estimar valores de `X` a partir de vizinhos no
-atrator de `Y`. A causalidade e inferida quando essa capacidade de "cross mapping"
-melhora (converge) a medida que mais dados sao usados para reconstruir o atrator.
+CCM (Sugihara et al., 2012) is grounded in dynamical-systems theory (Takens embedding):
+if `X` causes `Y` in a coupled dynamical system, information about `X`'s state is
+imprinted on `Y`'s reconstructed attractor, allowing values of `X` to be estimated from
+neighbors on `Y`'s attractor. Causality is inferred when this "cross mapping" ability
+improves (converges) as more data is used to reconstruct the attractor.
 
-## Premissas
+## Assumptions
 
-Assume dinamica deterministica de baixa dimensionalidade — o oposto do regime em que
-Granger causality classico foi pensado (sistemas estocasticos linearmente separaveis).
-Nao assume ausencia de confundidor latente da forma que causal_sufficiency descreve,
-mas depende de o sistema ser genuinamente um sistema dinamico acoplado, nao dominado
-por ruido.
+- **Stationarity: not required in the classical sense** -- the method targets
+  deterministic dynamical systems rather than stochastic stationary processes.
+- **Linearity: NOT required.** It targets nonlinear dynamics by design.
+- **Deterministic dynamics: REQUIRED.** The system must follow low-dimensional
+  deterministic dynamics, the opposite regime from what classical Granger causality was
+  designed for (linearly separable stochastic systems). It does not assume the absence
+  of a latent confounder in the way `causal_sufficiency` describes, but it does depend
+  on the system being a genuinely coupled dynamical system, not noise-dominated.
 
-## Quando usar
+## When to use
 
-Sistemas fracamente a moderadamente acoplados onde se suspeita de dinamica nao linear
-determinista (ex.: ecologia, sistemas fisiologicos) e onde a premissa de separabilidade
-do Granger causality classico e implausivel.
+Weakly to moderately coupled systems where deterministic nonlinear dynamics are
+suspected (e.g., ecology, physiological systems) and where classical Granger
+causality's separability assumption is implausible.
 
-## Quando evitar
+## When to avoid
 
-Sistemas dominados por ruido estocastico ou com acoplamento muito forte/sincronizado
-(nesse regime extremo, cross mapping bidirecional pode nao distinguir bem a direcao
-causal). Tambem inadequado quando o dominio nao sugere um sistema dinamico de baixa
-dimensionalidade.
+Systems dominated by stochastic noise, or with very strong/synchronized coupling (in
+that extreme regime, bidirectional cross mapping may not distinguish the causal
+direction well). Also unsuitable when the domain does not suggest a low-dimensional
+dynamical system.
 
-## Relação com outros métodos
+## Relationship to other methods
 
-E conceitualmente distinto de todos os oito metodos do framework: nenhum deles se
-baseia em reconstrucao de espaco de estados (embedding de Takens). E o metodo mais
-citado como alternativa quando as premissas de Granger causality (incluindo Neural
-Granger cMLP) sao consideradas inadequadas para sistemas dinamicos fortemente nao
-lineares e deterministicos.
+It is conceptually distinct from all eight methods implemented in the framework: none
+of them rely on state-space reconstruction (Takens embedding). It is the most commonly
+cited alternative when Granger-causality assumptions (including Neural Granger cMLP)
+are considered inadequate for strongly nonlinear, deterministic dynamical systems.

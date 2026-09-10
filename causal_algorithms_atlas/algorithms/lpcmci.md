@@ -8,13 +8,13 @@ output_type: pag
 assumptions:
   - id: stationarity
     required: true
-    statement: "Processo estacionario no intervalo analisado."
+    statement: "Stationary process over the analyzed window."
   - id: faithfulness
     required: true
-    statement: "Independencias observadas refletem a estrutura causal, nao coincidencia."
+    statement: "Observed independencies reflect the causal structure, not coincidence."
   - id: linearity
     required: true
-    statement: "O wrapper do framework usa ParCorr (correlacao parcial) como teste de independencia condicional, o que restringe a deteccao a dependencias lineares gaussianas."
+    statement: "The framework's wrapper uses ParCorr (partial correlation) as the conditional-independence test, which restricts detection to linear Gaussian dependencies."
 handles_latent_confounders: true
 handles_nonlinearity: false
 handles_contemporaneous_effects: true
@@ -27,40 +27,45 @@ framework_method_name: "LPCMCI"
 references: [gerhardus2020]
 verification: verified
 verified_by: "paper-cross-check+source-code"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-LPCMCI generaliza o PCMCI para o caso latente, retornando um DPAG (Directed Partial
-Ancestral Graph) em vez de um DAG totalmente orientado. Marcas de aresta podem ficar
-ambiguas (`o-o`, `o->`) quando os dados nao permitem determinar a orientacao com
-seguranca na presenca de confundidores nao observados.
+LPCMCI (Gerhardus & Runge, 2020) generalizes PCMCI to the latent-confounder case,
+returning a DPAG (Directed Partial Ancestral Graph) instead of a fully oriented DAG.
+Edge marks can remain ambiguous (`o-o`, `o->`) when the data does not allow the
+orientation to be determined with confidence in the presence of unobserved
+confounders.
 
-## Premissas
+## Assumptions
 
-Nao exige suficiencia causal — essa e a motivacao central do metodo. Ainda exige
-estacionariedade e fidelidade causal. O wrapper do framework usa `ParCorr`, herdando a
-mesma limitacao a dependencia linear que o PCMCI.
+- **Stationarity: REQUIRED.** The process must be stationary over the analyzed
+  window.
+- **Linearity: REQUIRED (in this framework's configuration).** The framework's
+  wrapper uses `ParCorr`, inheriting the same restriction to linear dependencies as
+  PCMCI.
+- **Causal sufficiency: NOT required.** This is the method's central motivation.
+- **Faithfulness: REQUIRED.** Observed independencies must reflect the true causal
+  structure.
 
-## Quando usar
+## When to use
 
-Quando ha suspeita razoavel de confundidor latente relevante e se aceita trabalhar com
-saida parcialmente orientada (PAG) em vez de um DAG completo.
+When a relevant latent confounder is reasonably suspected and a partially oriented
+output (PAG) is acceptable instead of a complete DAG.
 
-## Quando evitar
+## When to avoid
 
-Quando se precisa de uma aresta totalmente direcionada para toda relacao candidata: o
-framework nao converte marcas ambiguas ou bidirecionais do DPAG em setas causais, entao
-relacoes com marca ambigua simplesmente nao aparecem como evidencia direcionada na
-saida.
+When a fully directed edge is needed for every candidate relationship: the framework
+does not convert ambiguous or bidirected DPAG marks into causal arrows, so relationships
+with an ambiguous mark simply do not appear as directed evidence in the output.
 
-## Relação com outros métodos
+## Relationship to other methods
 
-Relaxa a suposicao mais forte do PCMCI (suficiencia causal) ao custo de ambiguidade de
-orientacao, de forma analoga a como FCI generaliza PC/GES no caso atemporal.
+Relaxes PCMCI's strongest assumption (causal sufficiency) at the cost of orientation
+ambiguity, analogous to how FCI generalizes PC/GES in the non-temporal case.
 
-## Notas de implementação
+## Implementation notes
 
-Wrapper em `causal_discovery/methods/lpcmci.py`, usando o LPCMCI do `tigramite` com
-`ParCorr`. Marcas ambiguas ou bidirecionais nao sao convertidas em arestas causais.
+Wrapper in `causal_discovery/methods/lpcmci.py`, using LPCMCI from `tigramite` with
+`ParCorr`. Ambiguous or bidirected marks are not converted into causal edges.

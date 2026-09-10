@@ -8,7 +8,7 @@ output_type: dag
 assumptions:
   - id: causal_sufficiency
     required: false
-    statement: "Nao exige suficiencia causal nem fidelidade — o metodo e identificavel mesmo sob nao-fidelidade, segundo o paper original."
+    statement: "Requires neither causal sufficiency nor faithfulness -- the method is identifiable even under non-faithfulness, per the original paper."
 handles_latent_confounders: false
 handles_nonlinearity: true
 handles_contemporaneous_effects: true
@@ -21,39 +21,43 @@ framework_method_name: null
 references: [peters2013]
 verification: verified
 verified_by: "paper-cross-check"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-TiMINo modela cada serie como uma equacao estrutural (SEM) restrita em funcao de seus
-pais causais (lagged e/ou instantaneos) mais um ruido independente. A restricao sobre
-a classe de funcoes admissiveis e o que garante identificabilidade: ao contrario de
-Granger causality, que explora variancia dos residuos, TiMINo explora a independencia
-estatistica entre residuo e causas — testando qual atribuicao causal produz residuos
-efetivamente independentes das variaveis de entrada.
+TiMINo (Peters et al., 2013) models each series as a restricted structural equation
+(SEM) in terms of its causal parents (lagged and/or instantaneous) plus independent
+noise. The restriction on the admissible function class is what guarantees
+identifiability: unlike Granger causality, which exploits residual variance, TiMINo
+exploits statistical independence between the residual and the causes -- testing which
+causal assignment produces residuals that are effectively independent of the input
+variables.
 
-## Premissas
+## Assumptions
 
-Segundo o paper original, TiMINo nao exige suficiencia causal nem fidelidade causal, e
-tolera realimentacao nao instantanea entre as series. A identificabilidade depende da
-classe restrita de funcoes assumida para as equacoes estruturais (nao lineares, mas
-nao arbitrarias).
+- **Stationarity: not declared as a formal precondition.**
+- **Linearity: NOT required.** TiMINo targets nonlinear structural equations, though
+  within a restricted function class (see below).
+- **Causal sufficiency: NOT required.** Per the original paper, TiMINo requires
+  neither causal sufficiency nor faithfulness, and tolerates non-instantaneous
+  feedback between series. Identifiability depends on the restricted function class
+  assumed for the structural equations (nonlinear, but not arbitrary).
 
-## Quando usar
+## When to use
 
-Quando se aceita a estrutura de modelo de equacoes estruturais com ruido independente e
-ha suspeita de relacoes nao lineares, lagged ou instantaneas, incluindo possivel
-realimentacao nao instantanea entre variaveis.
+When the structural-equation-with-independent-noise framework is acceptable and
+nonlinear, lagged, or instantaneous relationships are suspected, including possible
+non-instantaneous feedback between variables.
 
-## Quando evitar
+## When to avoid
 
-Quando a classe de funcoes estruturais assumida pelo TiMINo nao for uma aproximacao
-razoavel do processo gerador real — como em todo metodo baseado em modelo funcional
-restrito, a identificabilidade depende dessa escolha.
+When TiMINo's assumed structural function class is not a reasonable approximation of
+the true generating process -- as with any method based on a restricted functional
+model, identifiability hinges on that choice.
 
-## Relação com outros métodos
+## Relationship to other methods
 
-Ocupa a mesma familia (functional-causal-model) que VAR-LiNGAM no framework, mas troca
-a identificacao via nao-gaussianidade linear do LiNGAM por independencia entre residuo
-e causas sob uma classe de funcoes nao lineares mais geral.
+Occupies the same family (functional-causal-model) as VAR-LiNGAM in the framework, but
+trades LiNGAM's linear non-Gaussianity-based identification for independence between
+residual and causes under a more general nonlinear function class.

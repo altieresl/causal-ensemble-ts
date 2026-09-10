@@ -41,25 +41,25 @@ _VALID_CARD = textwrap.dedent(
     last_reviewed: "2026-09-07"
     ---
 
-    ## Ideia central
+    ## Core idea
 
-    Texto de exemplo.
+    Example text.
 
-    ## Premissas
+    ## Assumptions
 
-    Texto de exemplo.
+    Example text.
 
-    ## Quando usar
+    ## When to use
 
-    Texto de exemplo.
+    Example text.
 
-    ## Quando evitar
+    ## When to avoid
 
-    Texto de exemplo.
+    Example text.
 
-    ## Relação com outros métodos
+    ## Relationship to other methods
 
-    Texto de exemplo.
+    Example text.
     """
 )
 
@@ -72,14 +72,14 @@ class ParseAlgorithmCardTests(unittest.TestCase):
         self.assertEqual(card.verification, VerificationStatus.DRAFT)
         for section in REQUIRED_SECTIONS:
             self.assertIn(section, card.sections)
-        self.assertEqual(card.sections["Ideia central"], "Texto de exemplo.")
+        self.assertEqual(card.sections["Core idea"], "Example text.")
 
     def test_missing_frontmatter_delimiter_raises(self):
         with self.assertRaises(LoaderError):
             parse_algorithm_card("# sem frontmatter\n", source_path="bad.md")
 
     def test_missing_required_section_raises(self):
-        broken = _VALID_CARD.replace("## Quando evitar", "## Secao Errada")
+        broken = _VALID_CARD.replace("## When to avoid", "## Secao Errada")
         with self.assertRaises(LoaderError):
             parse_algorithm_card(broken, source_path="bad.md")
 

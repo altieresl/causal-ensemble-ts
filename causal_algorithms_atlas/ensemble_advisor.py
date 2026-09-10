@@ -122,7 +122,7 @@ def explain_recommendation(
     recommendations: list[MethodRecommendation],
     *,
     algorithms_dir: str | Path = _ALGORITHMS_DIR,
-    model: str = "llama3.1:8b",
+    model: str = "qwen2.5:7b",
 ) -> str:
     """Pede ao Llama local um resumo em prosa da composicao do ensemble.
 
@@ -138,7 +138,7 @@ def explain_recommendation(
     excluded = [rec for rec in recommendations if not rec.included]
 
     def _describe(rec: MethodRecommendation) -> str:
-        idea = cards[rec.algorithm_id].sections.get("Ideia central", "")
+        idea = cards[rec.algorithm_id].sections.get("Core idea", "")
         motivo = " ".join(rec.reasons)
         return f"- {rec.framework_method_name}: {idea}\n  Motivo: {motivo}"
 

@@ -8,7 +8,7 @@ output_type: signed-graph
 assumptions:
   - id: stationarity
     required: true
-    statement: "Series aproximadamente estacionarias no intervalo analisado."
+    statement: "Series approximately stationary over the analyzed window."
 handles_latent_confounders: false
 handles_nonlinearity: true
 handles_contemporaneous_effects: false
@@ -21,41 +21,44 @@ framework_method_name: "NeuralGrangercMLP"
 references: [tank2021]
 verification: verified
 verified_by: "paper-cross-check+source-code"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-Ajusta uma rede neural (MLP) por variavel-alvo, onde os pesos da primeira camada sao
-organizados por serie de origem e penalizados com uma penalizacao proximal estruturada
-(`GL`, `GSGL` ou hierarquica) que zera grupos inteiros de pesos. Uma serie de origem e
-considerada causa de Granger do alvo se algum peso do seu grupo permanece nao nulo apos
-o ajuste, generalizando o teste classico de Granger para relacoes nao lineares.
+Fits one neural network (MLP) per target variable, where the first-layer weights are
+grouped by source series and penalized with a structured proximal penalty (`GL`,
+`GSGL`, or hierarchical) that zeroes out entire weight groups (Tank et al., 2021). A
+source series is considered a Granger cause of the target if any weight in its group
+remains nonzero after fitting, generalizing the classical Granger test to nonlinear
+relationships.
 
-## Premissas
+## Assumptions
 
-Nao exige linearidade — essa e a motivacao central do metodo — mas ainda assume que a
-nocao de causalidade de Granger (poder preditivo incremental a partir do passado) e a
-pergunta relevante, e que a serie e razoavelmente estacionaria para a rede generalizar
-entre janelas de treino e avaliacao.
+- **Stationarity: REQUIRED.** The series must be reasonably stationary so the network
+  generalizes between the training and evaluation windows.
+- **Linearity: NOT required.** This is the method's central motivation: it explicitly
+  targets nonlinear lag relationships that classical Granger causality misses.
+- The method still assumes that Granger causality (incremental predictive power from
+  the past) is the relevant causal question, not structural/interventional causality.
 
-## Quando usar
+## When to use
 
-Quando ha suspeita de relacao nao linear entre series e se aceita a interpretacao
-preditiva (Granger) de causalidade em vez de uma estrutural.
+When a nonlinear relationship between series is suspected and the predictive (Granger)
+interpretation of causality is acceptable in place of a structural one.
 
-## Quando evitar
+## When to avoid
 
-Com poucas observacoes: redes neurais por alvo precisam de dados suficientes para a
-penalizacao estruturada distinguir sinal de ruido, e os resultados tendem a saida densa
-com muitos falsos positivos em amostras pequenas.
+With few observations: per-target neural networks need enough data for the structured
+penalty to separate signal from noise, and results tend toward dense output with many
+false positives on small samples.
 
-## Relação com outros métodos
+## Relationship to other methods
 
-Generalizacao nao linear direta do Classical Granger, seguindo o codigo de referencia
-Neural-GC dos mesmos autores da formulacao.
+A direct nonlinear generalization of Classical Granger, following the reference
+Neural-GC code from the same authors of the formulation.
 
-## Notas de implementação
+## Implementation notes
 
-Wrapper em `causal_discovery/methods/neural_granger.py`. Uma rede por alvo, penalizacao
-proximal estruturada configuravel via `default_kwargs`.
+Wrapper in `causal_discovery/methods/neural_granger.py`. One network per target,
+structured proximal penalty configurable via `default_kwargs`.

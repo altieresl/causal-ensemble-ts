@@ -13,7 +13,7 @@ from causal_algorithms_atlas.export import Chunk, cards_to_chunks
 from causal_algorithms_atlas.loader import load_algorithm_cards
 
 _ATLAS_ROOT_ALGORITHMS = "causal_algorithms_atlas/algorithms"
-_DEFAULT_MODEL = "llama3.1:8b"
+_DEFAULT_MODEL = "qwen2.5:7b"
 _DEFAULT_BASE_URL = "http://localhost:11434"
 _TIMEOUT_SECONDS = 120
 

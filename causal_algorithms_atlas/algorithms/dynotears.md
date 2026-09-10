@@ -8,10 +8,10 @@ output_type: signed-graph
 assumptions:
   - id: linearity
     required: true
-    statement: "Relacoes lagged e instantaneas lineares."
+    statement: "Linear lagged and instantaneous relationships."
   - id: acyclicity_instantaneous
     required: true
-    statement: "Estrutura instantanea (lag 0) e aciclica, imposta via restricao continua suave."
+    statement: "The instantaneous (lag 0) structure is acyclic, enforced via a smooth continuous constraint."
 handles_latent_confounders: false
 handles_nonlinearity: false
 handles_contemporaneous_effects: true
@@ -24,41 +24,46 @@ framework_method_name: "DYNOTEARS"
 references: [pamfil2020]
 verification: verified
 verified_by: "paper-cross-check+source-code"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-Formula a descoberta causal como um problema de otimizacao continua: aprende
-simultaneamente as matrizes de coeficientes lagged e instantanea minimizando erro de
-reconstrucao com penalizacao L1 (esparsidade) sujeita a uma restricao de aciclicidade
-suave (diferenciavel) sobre a estrutura instantanea, no estilo NOTEARS estendido para o
-caso temporal.
+Formulates causal discovery as a continuous optimization problem (Pamfil et al.,
+2020): it simultaneously learns the lagged and instantaneous coefficient matrices by
+minimizing reconstruction error with an L1 (sparsity) penalty, subject to a smooth
+(differentiable) acyclicity constraint on the instantaneous structure -- NOTEARS
+extended to the temporal case.
 
-## Premissas
+## Assumptions
 
-Linearidade de todas as relacoes e aciclicidade da estrutura instantanea, imposta
-explicitamente pela restricao de otimizacao (nao apenas assumida — o metodo falha em
-convergir para uma estrutura com ciclos instantaneos por construcao).
+- **Stationarity: NOT required.** The method does not declare stationarity as a
+  precondition; the optimization formulation accepts either a single long series or a
+  panel of short replicates.
+- **Linearity: REQUIRED.** All relationships (lagged and instantaneous) are assumed
+  linear.
+- **Acyclicity (instantaneous): REQUIRED.** Enforced explicitly by the optimization
+  constraint -- not merely assumed -- the method fails to converge to a structure with
+  instantaneous cycles by construction.
 
-## Quando usar
+## When to use
 
-Quando o numero de variaveis e moderado a grande e se aceita a formulacao linear;
-tambem util quando os dados sao um painel de series (multiplas replicas curtas) em vez
-de uma unica serie longa, ja que a formulacao de otimizacao aceita ambos.
+When the number of variables is moderate to large and the linear formulation is
+acceptable; also useful when the data is a panel of series (multiple short replicates)
+rather than a single long series, since the optimization formulation accepts both.
 
-## Quando evitar
+## When to avoid
 
-Quando a restricao de aciclicidade instantanea for implausivel para o dominio (ex.: se
-ha razao para esperar um ciclo de feedback instantaneo entre variaveis).
+When the instantaneous-acyclicity constraint is implausible for the domain (e.g., if
+an instantaneous feedback loop between variables is expected).
 
-## Relação com outros métodos
+## Relationship to other methods
 
-E a contraparte de VAR-LiNGAM que troca a identificacao via nao-gaussianidade por uma
-restricao explicita de otimizacao para orientar a estrutura instantanea; nao exige
-nao-gaussianidade dos residuos.
+It is VAR-LiNGAM's counterpart, trading identification via non-Gaussianity for an
+explicit optimization constraint to orient the instantaneous structure; it does not
+require non-Gaussian residuals.
 
-## Notas de implementação
+## Implementation notes
 
-Implementacao local em `causal_discovery/methods/dynotears.py`: formulacao linear com
-restricao suave de aciclicidade e penalizacao L1 compartilhada. `signed_score=True`.
+Local implementation in `causal_discovery/methods/dynotears.py`: linear formulation
+with a smooth acyclicity constraint and a shared L1 penalty. `signed_score=True`.

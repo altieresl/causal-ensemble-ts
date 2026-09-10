@@ -32,23 +32,23 @@ verified_by: "paper-cross-check"
 last_reviewed: "2026-09-07"
 ---
 
-## Ideia central
+## Core idea
 
 x
 
-## Premissas
+## Assumptions
 
 x
 
-## Quando usar
+## When to use
 
 x
 
-## Quando evitar
+## When to avoid
 
 x
 
-## Relação com outros métodos
+## Relationship to other methods
 
 x
 """

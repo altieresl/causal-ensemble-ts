@@ -8,10 +8,10 @@ output_type: pag
 assumptions:
   - id: faithfulness
     required: true
-    statement: "Independencias observadas refletem a estrutura causal, nao coincidencia."
+    statement: "Observed independencies reflect the causal structure, not coincidence."
   - id: linearity
     required: true
-    statement: "O wrapper do framework usa 'fisherz' como teste de independencia por padrao, o que restringe a deteccao a dependencias lineares gaussianas."
+    statement: "The framework's wrapper uses 'fisherz' as the default independence test, which restricts detection to linear Gaussian dependencies."
 handles_latent_confounders: true
 handles_nonlinearity: false
 handles_contemporaneous_effects: true
@@ -24,42 +24,50 @@ framework_method_name: "FCI"
 references: [spirtes1995]
 verification: verified
 verified_by: "paper-cross-check+source-code"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-FCI (Fast Causal Inference) generaliza PC para o caso com confundidores latentes e
-selecao amostral, retornando um PAG (Partial Ancestral Graph) em vez de um DAG. Como
-GES, e um algoritmo geral adaptado ao caso temporal no framework via desenrolamento em
-uma matriz `variavel_t`, `variavel_lag_1`, ....
+FCI (Fast Causal Inference, Spirtes et al., 1995) generalizes PC to the case with
+latent confounders and selection bias, returning a PAG (Partial Ancestral Graph)
+instead of a DAG. Like GES, it is a general algorithm adapted to the temporal case in
+this framework via unrolling into a `variable_t`, `variable_lag_1`, ... matrix.
 
-## Premissas
+## Assumptions
 
-Fidelidade causal — nao exige suficiencia causal, o que e a motivacao central do
-metodo frente a PC/GES. No framework, conhecimento previo proibe arestas
-presente -> passado na matriz desenrolada, refletindo a ordem temporal conhecida.
+- **Stationarity: NOT required.** No stationarity precondition is declared.
+- **Linearity: REQUIRED (in this framework's configuration).** The framework's wrapper
+  uses Fisher-Z as the default independence test, which restricts detection to linear
+  Gaussian dependencies -- even though FCI's general formulation is not tied to a
+  specific test.
+- **Causal sufficiency: NOT required.** This is FCI's central motivation relative to
+  PC/GES -- it explicitly tolerates latent confounders.
+- **Faithfulness: REQUIRED.** Observed independencies must reflect the true causal
+  structure. In the framework, prior knowledge forbids present -> past edges in the
+  unrolled matrix, reflecting the known temporal order.
 
-## Quando usar
+## When to use
 
-Quando ha suspeita de confundidor latente e se aceita saida parcialmente orientada
-(PAG); por padrao o framework retorna apenas arestas PAG definitivamente orientadas,
-como o LPCMCI.
+When a latent confounder is suspected and a partially oriented output (PAG) is
+acceptable; by default the framework returns only definitively oriented PAG edges,
+like LPCMCI.
 
-## Quando evitar
+## When to avoid
 
-Mesma ressalva do GES: e um algoritmo geral para dados tabulares, nao nativamente
-temporal. A adaptacao usa o algoritmo oficial mas nao o torna estacionario como PCMCI.
+Same caveat as GES: it is a general algorithm for tabular data, not natively temporal.
+The adaptation uses the official algorithm but does not make it stationarity-aware like
+PCMCI.
 
-## Relação com outros métodos
+## Relationship to other methods
 
-Papel para GES o mesmo que LPCMCI faz para PCMCI: versão que tolera confundidor latente
-trocando DAG totalmente orientado por PAG parcialmente orientado.
+Plays the same role for GES that LPCMCI plays for PCMCI: a version that tolerates
+latent confounders by trading a fully oriented DAG for a partially oriented PAG.
 
-## Notas de implementação
+## Implementation notes
 
-Wrapper em `causal_discovery/methods/causal_learn.py` e alias em
-`causal_discovery/methods/heterogeneous_fci.py` (`run_heterogeneous_fci` e mantido como
-alias compativel de `run_fci`). Usa o FCI oficial do `causal-learn` sobre a matriz
-temporal expandida, com conhecimento previo proibindo presente -> passado. Por padrao
-retorna apenas arestas PAG definitivamente orientadas.
+Wrapper in `causal_discovery/methods/causal_learn.py`, with an alias in
+`causal_discovery/methods/heterogeneous_fci.py` (`run_heterogeneous_fci` is kept as a
+compatible alias for `run_fci`). Uses the official `causal-learn` FCI implementation
+over the expanded temporal matrix, with prior knowledge forbidding present -> past
+edges. By default returns only definitively oriented PAG edges.

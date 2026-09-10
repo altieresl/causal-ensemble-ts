@@ -45,22 +45,22 @@ def _known_methods(algorithms_dir: str | Path) -> list[str]:
 def _catalog_text(algorithms_dir: str | Path, names: list[str], language: str) -> str:
     """Monta o catalogo a partir das fichas reais em ``algorithms/*.md``.
 
-    As fichas so existem em portugues -- essa e a fonte de verdade unica das
+    As fichas sao mantidas em ingles -- essa e a fonte de verdade unica das
     premissas (``loader.load_algorithm_cards``), a mesma usada por
-    ``recommend_framework_methods``. Para o idioma ingles, so os *rotulos* das
-    secoes mudam; o conteudo (Ideia central/Premissas) nunca e duplicado ou
-    traduzido a mao, para nao criar uma segunda base que possa divergir da
-    ficha verificada se ela for editada.
+    ``recommend_framework_methods``. O idioma so muda os *rotulos* das secoes
+    no prompt (para portugues, quando ``language="pt"``); o conteudo (Core
+    idea/Assumptions) nunca e duplicado ou traduzido a mao, para nao criar uma
+    segunda base que possa divergir da ficha verificada se ela for editada.
     """
-    idea_label = "Core idea" if language == "en" else "Ideia central"
-    premises_label = "Assumptions" if language == "en" else "Premissas"
+    idea_label = "Ideia central" if language == "pt" else "Core idea"
+    premises_label = "Premissas" if language == "pt" else "Assumptions"
     cards = load_algorithm_cards(algorithms_dir)
     by_method = {c.framework_method_name: c for c in cards.values()}
     blocks = []
     for name in names:
         card = by_method[name]
-        idea = card.sections.get("Ideia central", "").strip()
-        premissas = card.sections.get("Premissas", "").strip()
+        idea = card.sections.get("Core idea", "").strip()
+        premissas = card.sections.get("Assumptions", "").strip()
         blocks.append(f'### "{name}"\n{idea_label}: {idea}\n{premises_label}: {premissas}')
     return "\n\n".join(blocks)
 
@@ -156,7 +156,7 @@ def recommend_methods_via_chat(
     profile: DatasetProfile,
     *,
     algorithms_dir: str | Path = _ALGORITHMS_DIR,
-    model: str = "llama3.1:8b",
+    model: str = "qwen2.5:7b",
     language: str = "pt",
 ) -> ChatMethodSelection:
     """Pede ao chat local (Ollama) para selecionar algoritmos a partir do perfil.

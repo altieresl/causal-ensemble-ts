@@ -8,16 +8,16 @@ output_type: dag
 assumptions:
   - id: causal_sufficiency
     required: true
-    statement: "Ausencia de confundidores latentes nao medidos."
+    statement: "Absence of relevant unmeasured latent confounders."
   - id: stationarity
     required: true
-    statement: "Processo estacionario no intervalo analisado."
+    statement: "Stationary process over the analyzed window."
   - id: faithfulness
     required: true
-    statement: "Independencias observadas refletem a estrutura causal, nao coincidencia."
+    statement: "Observed independencies reflect the causal structure, not coincidence."
   - id: linearity
     required: true
-    statement: "O wrapper do framework usa ParCorr (correlacao parcial) como teste de independencia condicional, o que restringe a deteccao a dependencias lineares gaussianas."
+    statement: "The framework's wrapper uses ParCorr (partial correlation) as the conditional-independence test, which restricts detection to linear Gaussian dependencies."
 handles_latent_confounders: false
 handles_nonlinearity: false
 handles_contemporaneous_effects: false
@@ -30,47 +30,52 @@ framework_method_name: "PCMCI"
 references: [runge2019]
 verification: verified
 verified_by: "paper-cross-check+source-code"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-PCMCI combina duas etapas: primeiro, uma selecao de condicionantes (PC1) reduz o
-conjunto de pais candidatos de cada variavel usando testes de independencia condicional
-iterativos; depois, o teste MCI (Momentary Conditional Independence) avalia cada
-relacao remanescente condicionando tanto nos pais estimados do alvo quanto nos da
-origem, o que controla autocorrelacao e confundimento indireto ao mesmo tempo. O
-wrapper do framework usa `ParCorr` (correlacao parcial) como teste de independencia,
-portanto a dependencia condicional testada e linear mesmo que o metodo em si nao seja
-restrito a isso na formulacao geral.
+PCMCI (Runge et al., 2019) combines two stages: first, a condition-selection phase
+(PC1) reduces the candidate-parent set of each variable using iterative
+conditional-independence tests; then the MCI (Momentary Conditional Independence) test
+evaluates each remaining relationship conditioning on both the target's and the
+source's estimated parents, which controls for autocorrelation and indirect
+confounding at the same time. The framework's wrapper uses `ParCorr` (partial
+correlation) as the independence test, so the conditional dependence being tested is
+linear even though the general PCMCI formulation is not restricted to that.
 
-## Premissas
+## Assumptions
 
-Exige suficiencia causal (nenhum confundidor latente relevante), estacionariedade no
-trecho analisado e fidelidade causal. Com `ParCorr`, adicionalmente assume relacoes
-lineares gaussianas para os testes de independencia terem poder estatistico adequado.
+- **Stationarity: REQUIRED.** The process must be stationary over the analyzed
+  window.
+- **Linearity: REQUIRED (in this framework's configuration).** With `ParCorr`, the
+  independence tests additionally assume linear Gaussian relationships for adequate
+  statistical power.
+- **Causal sufficiency: REQUIRED.** No relevant unmeasured latent confounders.
+- **Faithfulness: REQUIRED.** Observed independencies must reflect the true causal
+  structure.
 
-## Quando usar
+## When to use
 
-Series com muitas variaveis e autocorrelacao temporal forte, quando se pode assumir
-ausencia de confundidores latentes relevantes. Bom ponto de partida por ser rapido e
-por retornar apenas relacoes lagged definitivamente direcionadas (sem ambiguidade de
-orientacao), o que facilita interpretacao.
+Series with many variables and strong temporal autocorrelation, when the absence of
+relevant latent confounders can be assumed. A good starting point: it is fast and
+returns only definitively oriented lagged relationships (no orientation ambiguity),
+which makes interpretation easier.
 
-## Quando evitar
+## When to avoid
 
-Quando ha suspeita forte de confundidor latente (nesse caso, considerar LPCMCI) ou
-quando a relacao de interesse e genuinamente nao linear e o teste `ParCorr` mascara a
-dependencia.
+When a latent confounder is strongly suspected (consider LPCMCI in that case), or when
+the relationship of interest is genuinely nonlinear and the `ParCorr` test masks the
+dependency.
 
-## Relação com outros métodos
+## Relationship to other methods
 
-E o predecessor direto do LPCMCI, que relaxa a suficiencia causal ao custo de retornar
-marcas ambiguas em vez de arestas totalmente orientadas. Comparado a Classical Granger,
-PCMCI condiciona em um conjunto de pais selecionado por dados em vez de usar todos os
-lags disponiveis, o que reduz falsos positivos em redes densas.
+It is the direct predecessor of LPCMCI, which relaxes causal sufficiency at the cost of
+returning ambiguous marks instead of fully oriented edges. Compared to Classical
+Granger, PCMCI conditions on a data-selected parent set instead of using all available
+lags, which reduces false positives in dense networks.
 
-## Notas de implementação
+## Implementation notes
 
-Wrapper em `causal_discovery/methods/pcmci.py`, usando o PCMCI do pacote `tigramite`
-com `ParCorr`. Retorna apenas relacoes lagged definitivamente direcionadas.
+Wrapper in `causal_discovery/methods/pcmci.py`, using PCMCI from the `tigramite`
+package with `ParCorr`. Returns only definitively oriented lagged relationships.

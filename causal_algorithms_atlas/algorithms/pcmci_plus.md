@@ -8,13 +8,13 @@ output_type: dag
 assumptions:
   - id: causal_sufficiency
     required: true
-    statement: "Ausencia de confundidores latentes nao medidos."
+    statement: "Absence of relevant unmeasured latent confounders."
   - id: stationarity
     required: true
-    statement: "Processo estacionario no intervalo analisado."
+    statement: "Stationary process over the analyzed window."
   - id: faithfulness
     required: true
-    statement: "Independencias observadas refletem a estrutura causal, nao coincidencia."
+    statement: "Observed independencies reflect the causal structure, not coincidence."
 handles_latent_confounders: false
 handles_nonlinearity: true
 handles_contemporaneous_effects: true
@@ -27,39 +27,45 @@ framework_method_name: null
 references: [runge2020pcmciplus]
 verification: verified
 verified_by: "paper-cross-check"
-last_reviewed: "2026-09-07"
+last_reviewed: "2026-09-09"
 ---
 
-## Ideia central
+## Core idea
 
-PCMCI+ estende PCMCI para descobrir tambem relacoes contemporaneas (lag 0), nao apenas
-defasadas. Usa um esquema de selecao de condicionantes separado para o grafo lagged e
-para o esqueleto contemporaneo, o que evita que a forte autocorrelacao tipica de series
-temporais infle falsos positivos nas relacoes instantaneas — problema que o paper
-mostra afetar PC e outros metodos aplicados ingenuamente ao caso temporal. A formulacao
-geral do teste de independencia condicional nao exige linearidade, embora a escolha
-pratica do teste (ex.: `ParCorr`) determine se a instancia usada e linear.
+PCMCI+ (Runge, 2020) extends PCMCI to also discover contemporaneous (lag 0)
+relationships, not only lagged ones. It uses a separate condition-selection scheme for
+the lagged graph and for the contemporaneous skeleton, which prevents the strong
+autocorrelation typical of time series from inflating false positives in the
+instantaneous relationships -- a problem the paper shows affects PC and other methods
+applied naively to the temporal case. The general conditional-independence test
+formulation does not require linearity, though the practical choice of test (e.g.
+`ParCorr`) determines whether the instance used is linear.
 
-## Premissas
+## Assumptions
 
-Suficiencia causal, estacionariedade e fidelidade causal, como PCMCI. Diferente de
-LPCMCI, ainda assume ausencia de confundidores latentes.
+- **Stationarity: REQUIRED.** Stationary process over the analyzed window.
+- **Linearity: not required by the general formulation** (depends on the
+  conditional-independence test chosen in practice).
+- **Causal sufficiency: REQUIRED.** Unlike LPCMCI, it still assumes the absence of
+  latent confounders.
+- **Faithfulness: REQUIRED.** Observed independencies must reflect the true causal
+  structure.
 
-## Quando usar
+## When to use
 
-Quando ha razao para esperar efeitos contemporaneos relevantes (lag 0) alem dos
-defasados e nao ha suspeita forte de confundidor latente — cobre uma lacuna que o
-PCMCI original (apenas lagged) deixa e que o framework atual preenche parcialmente
-apenas com VAR-LiNGAM e DYNOTEARS (ambos lineares).
+When relevant contemporaneous (lag 0) effects are expected in addition to lagged ones,
+and there is no strong suspicion of a latent confounder -- it covers a gap that
+original PCMCI (lagged only) leaves, which the current framework fills only partially,
+with VAR-LiNGAM and DYNOTEARS (both linear).
 
-## Quando evitar
+## When to avoid
 
-Quando ha suspeita de confundidor latente: PCMCI+ mantem a suposicao de suficiencia
-causal, diferente de LPCMCI.
+When a latent confounder is suspected: PCMCI+ keeps the causal-sufficiency assumption,
+unlike LPCMCI.
 
-## Relação com outros métodos
+## Relationship to other methods
 
-E o proximo passo natural apos PCMCI antes de introduzir a tolerancia a confundidor
-latente do LPCMCI; cobre o mesmo tipo de lacuna que VAR-LiNGAM e DYNOTEARS cobrem no
-framework atual (efeitos contemporaneos), mas dentro do paradigma constraint-based em
-vez de functional-causal-model/continuous-optimization.
+It is the natural next step after PCMCI before introducing LPCMCI's tolerance for
+latent confounders; it covers the same kind of gap that VAR-LiNGAM and DYNOTEARS cover
+in the current framework (contemporaneous effects), but within the constraint-based
+paradigm rather than functional-causal-model/continuous-optimization.
