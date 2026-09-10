@@ -1,0 +1,4 @@
+Edge,Direct,Coefficient,Lag,Type
+X0 → X2,True,0.5,1.0,linear
+X0 → Y,True,0.6,1.0,linear
+X1 → Y,True,0.4,1.0,linear

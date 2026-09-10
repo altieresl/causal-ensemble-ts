@@ -23,6 +23,16 @@ pressionando um eixo diferente do perfil (dataset_profile.DatasetProfile):
 
 Mesmo formato de saida de synthetic_causal_datasets.ipynb: CSV de dados e CSV de
 ground truth com colunas Edge/Direct/Coefficient/Lag/Type.
+
+- toy_f_non_gaussian: dataset de CALIBRACAO (nao usado nos testes de selecao de
+  algoritmo dos outros 3) para o eixo non_gaussian_errors de
+  causal_algorithms_atlas/dataset_profile.py. X0/X2 recebem inovacoes uniformes
+  (nao gaussiana, simetrica), X3 recebe inovacoes exponenciais centralizadas
+  (nao gaussiana, assimetrica), X1/Y recebem ruido gaussiano normal (controle).
+  Usado para calibrar os limiares de skewness/curtose em excesso do residuo de
+  um VAR(1) que substituiram o teste de significancia (Shapiro-Wilk) original,
+  descartado por rejeitar normalidade em amostras grandes mesmo com residuos
+  gaussianos de verdade (ver dataset_profile._NON_GAUSSIAN_SKEW_THRESHOLD).
 """
 from __future__ import annotations
 
@@ -137,6 +147,34 @@ def generate_toy_e_boundary_mixed(T: int = 1300, seed: int = 99) -> tuple[pd.Dat
     return data, ground_truth
 
 
+def generate_toy_f_non_gaussian(T: int = 1200, seed: int = 123) -> tuple[pd.DataFrame, pd.DataFrame]:
+    rng = np.random.default_rng(seed)
+
+    x0 = np.zeros(T)  # AR(1), inovacoes uniformes -- nao gaussiana, simetrica
+    x1 = np.zeros(T)  # AR(1), inovacoes gaussianas -- controle
+    x2 = np.zeros(T)  # depende de X0, inovacoes uniformes -- nao gaussiana
+    x3 = np.zeros(T)  # AR(1), inovacoes exponenciais centralizadas -- nao gaussiana, assimetrica
+    y = np.zeros(T)  # depende de X0 (nao gaussiano) e X1 (gaussiano), inovacao propria gaussiana
+
+    for t in range(1, T):
+        x0[t] = 0.5 * x0[t - 1] + rng.uniform(-0.6, 0.6)
+        x1[t] = 0.4 * x1[t - 1] + rng.normal(0, 0.5)
+        x2[t] = 0.5 * x0[t - 1] + 0.3 * x2[t - 1] + rng.uniform(-0.5, 0.5)
+        x3[t] = 0.4 * x3[t - 1] + (rng.exponential(0.4) - 0.4)
+        y[t] = 0.6 * x0[t - 1] + 0.4 * x1[t - 1] + rng.normal(0, 0.5)
+
+    data = pd.DataFrame({"X0": x0, "X1": x1, "X2": x2, "X3": x3, "Y": y})
+
+    ground_truth = pd.DataFrame(
+        [
+            {"Edge": "X0 → X2", "Direct": True, "Coefficient": 0.5, "Lag": 1.0, "Type": "linear"},
+            {"Edge": "X0 → Y", "Direct": True, "Coefficient": 0.6, "Lag": 1.0, "Type": "linear"},
+            {"Edge": "X1 → Y", "Direct": True, "Coefficient": 0.4, "Lag": 1.0, "Type": "linear"},
+        ]
+    )
+    return data, ground_truth
+
+
 if __name__ == "__main__":
     data_c, gt_c = generate_toy_c_nonstationary()
     data_c.to_csv(OUT_DIR / "toy_c_nonstationary.csv", index=False)
@@ -150,7 +188,11 @@ if __name__ == "__main__":
     data_e.to_csv(OUT_DIR / "toy_e_boundary_mixed.csv", index=False)
     gt_e.to_csv(OUT_DIR / "toy_e_boundary_mixed_gt.csv", index=False)
 
+    data_f, gt_f = generate_toy_f_non_gaussian()
+    data_f.to_csv(OUT_DIR / "toy_f_non_gaussian.csv", index=False)
+    gt_f.to_csv(OUT_DIR / "toy_f_non_gaussian_gt.csv", index=False)
+
     print(
-        "OK: toy_c_nonstationary, toy_d_mixed_nonlinear e toy_e_boundary_mixed "
-        f"(csv/gt) gerados em {OUT_DIR}"
+        "OK: toy_c_nonstationary, toy_d_mixed_nonlinear, toy_e_boundary_mixed e "
+        f"toy_f_non_gaussian (csv/gt) gerados em {OUT_DIR}"
     )

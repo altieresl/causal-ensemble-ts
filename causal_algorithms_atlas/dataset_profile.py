@@ -4,11 +4,13 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+from scipy.stats import kurtosis, skew
 from statsmodels.tsa.stattools import adfuller
 
 _STATIONARITY_ALPHA = 0.05
 _MIN_OBSERVATIONS_FOR_ADF = 8
 _MIN_OBSERVATIONS_FOR_EFFECT_SIZE = 40
+_MIN_OBSERVATIONS_FOR_NORMALITY_TEST = 20
 # Calibrado empiricamente (nao e um valor convencional como o alfa=0.05 de
 # significancia): em toy_a_linear (relacoes lineares conhecidas), o "chao de
 # ruido" do ganho preditivo fica abaixo de 0.001. Em toy_b_nonlinear (relacoes
@@ -18,6 +20,21 @@ _MIN_OBSERVATIONS_FOR_EFFECT_SIZE = 40
 # calibracao, nao uma verdade estatistica -- revisar se novos datasets
 # mostrarem uma zona cinzenta diferente.
 _NONLINEARITY_EFFECT_SIZE_THRESHOLD = 0.005
+# Calibrado empiricamente, mesmo espirito do limiar acima -- NAO e um teste de
+# significancia (p-valor de Shapiro-Wilk foi testado primeiro e descartado: com
+# n=20000 em toy_a_linear, rejeitava normalidade para residuos com skewness
+# ~0.01 e curtose em excesso ~-0.02, valores identicos a uma gaussiana de
+# verdade -- o mesmo problema de "RESET rejeita qualquer desvio com dados
+# suficientes" ja resolvido para linearidade, so que reintroduzido aqui). O
+# "chao de ruido" gaussiano, medido nos residuos de VAR(1) de toy_a/c/d/e
+# (todos com ruido rng.normal por construcao), fica em |skewness| <= 0.13 e
+# |curtose em excesso| <= 0.42. Um dataset de calibracao com ruido deliberadamente
+# nao gaussiano (toy_f_non_gaussian: inovacoes uniformes e exponenciais) fica em
+# |curtose em excesso| >= 1.12 (uniforme, simetrica) e |skewness| >= 1.58
+# (exponencial, assimetrica). Os limiares abaixo ficam no meio dessas duas
+# faixas, com margem dos dois lados.
+_NON_GAUSSIAN_SKEW_THRESHOLD = 0.5
+_NON_GAUSSIAN_KURTOSIS_THRESHOLD = 0.6
 _N_VALIDATION_SPLITS = 4
 
 
@@ -30,6 +47,9 @@ class VariableProfile:
     adf_p_value: float | None
     linear: bool | None
     nonlinearity_effect_size: float | None
+    non_gaussian: bool | None
+    residual_skewness: float | None
+    residual_excess_kurtosis: float | None
 
 
 @dataclass(frozen=True)
@@ -54,6 +74,10 @@ class DatasetProfile:
         return [v.linear for v in self.variables if v.linear is not None]
 
     @property
+    def _testable_non_gaussian(self) -> list[bool]:
+        return [v.non_gaussian for v in self.variables if v.non_gaussian is not None]
+
+    @property
     def stationary_fraction(self) -> float:
         values = self._testable_stationarity
         return float(np.mean(values)) if values else 0.0
@@ -64,12 +88,21 @@ class DatasetProfile:
         return float(np.mean(values)) if values else 0.0
 
     @property
+    def non_gaussian_fraction(self) -> float:
+        values = self._testable_non_gaussian
+        return float(np.mean(values)) if values else 0.0
+
+    @property
     def mostly_stationary(self) -> bool:
         return self.stationary_fraction >= 0.5
 
     @property
     def mostly_linear(self) -> bool:
         return self.linear_fraction >= 0.5
+
+    @property
+    def mostly_non_gaussian(self) -> bool:
+        return self.non_gaussian_fraction >= 0.5
 
     def to_query_text(self) -> str:
         # Declara as duas fracoes (estacionaria/nao, linear/nao) sempre explicitamente,
@@ -88,6 +121,10 @@ class DatasetProfile:
             f"{1.0 - self.linear_fraction:.0%} nao tem (comparando erro "
             "de previsao fora da amostra entre um modelo linear e um modelo com termos "
             "quadraticos). "
+            f"{self.non_gaussian_fraction:.0%} das series testadas tem residuos de um VAR(1) "
+            f"nao gaussianos e {1.0 - self.non_gaussian_fraction:.0%} tem residuos compativeis "
+            "com uma distribuicao normal (tamanho de efeito: skewness/curtose dos residuos "
+            "acima de um limiar calibrado, nao um teste de significancia puro). "
             "Confundidores latentes nao sao verificaveis apenas a partir dos dados observados "
             "(limite de identificabilidade, nao uma medida deste perfil). "
             "Quais algoritmos de causal discovery sao mais adequados para este perfil?"
@@ -262,8 +299,73 @@ def _nonlinearity_effect_size_for_target(
     return float((linear_mse - nonlinear_mse) / linear_mse)
 
 
+def _var1_residuals(target_column: str, numeric_data: pd.DataFrame) -> np.ndarray | None:
+    """Residuos de uma regressao ridge do alvo sobre o lag 1 de todas as variaveis.
+
+    E o mesmo desenho de ``_nonlinearity_effect_size_for_target`` (lag 1 de todas
+    as variaveis, preditores padronizados, ridge para estabilidade numerica), mas
+    ajustado dentro da amostra inteira em vez de em janelas expansivas: aqui o
+    objetivo nao e medir erro fora da amostra, e sim obter um residuo por
+    observacao para medir sua forma (skewness/curtose), entao usar todos os
+    dados disponiveis para o ajuste e preferivel a descartar parte deles em splits.
+    """
+    lagged = numeric_data.shift(1).add_suffix("_lag1")
+    frame = pd.concat([numeric_data[[target_column]], lagged], axis=1).dropna()
+    if len(frame) < _MIN_OBSERVATIONS_FOR_NORMALITY_TEST:
+        return None
+
+    target = _winsorize(frame[target_column].to_numpy(dtype=float))
+    predictors = _winsorize(frame.drop(columns=[target_column]).to_numpy(dtype=float))
+    varying_columns = np.std(predictors, axis=0) > 1e-12
+    predictors = predictors[:, varying_columns]
+    if predictors.shape[1] == 0 or np.std(target) < 1e-12:
+        return None
+
+    predictor_mean = predictors.mean(axis=0)
+    predictor_scale = predictors.std(axis=0)
+    predictor_scale[predictor_scale < 1e-12] = 1.0
+    standardized_predictors = (predictors - predictor_mean) / predictor_scale
+
+    target_mean = float(target.mean())
+    try:
+        system = standardized_predictors.T @ standardized_predictors + 1.0 * np.eye(
+            standardized_predictors.shape[1]
+        )
+        coefficients = np.linalg.solve(
+            system, standardized_predictors.T @ (target - target_mean)
+        )
+    except Exception:
+        return None
+
+    fitted = target_mean + standardized_predictors @ coefficients
+    return target - fitted
+
+
+def _non_gaussian_moments_for_target(
+    target_column: str, numeric_data: pd.DataFrame
+) -> tuple[float, float] | None:
+    """Skewness e curtose em excesso dos residuos de um VAR(1), para medir forma.
+
+    Testado primeiro com um teste de significancia (Shapiro-Wilk, p<alfa) e
+    descartado: com amostras grandes (ex.: toy_a_linear, n=20000) rejeitava
+    normalidade para residuos com skewness/curtose numericamente identicos a
+    uma gaussiana verdadeira -- o mesmo problema do RESET para linearidade
+    ("rejeita qualquer desvio, por menor que seja, com dados suficientes").
+    Skewness != 0 ou curtose em excesso != 0 (ambas 0 para uma gaussiana)
+    mede o tamanho do desvio diretamente, sem escalar com o tamanho da amostra
+    -- e o mesmo raciocinio do ganho preditivo usado para linearidade, aplicado
+    a forma da distribuicao em vez de erro de previsao.
+    """
+    residuals = _var1_residuals(target_column, numeric_data)
+    if residuals is None or len(residuals) < _MIN_OBSERVATIONS_FOR_NORMALITY_TEST:
+        return None
+    if np.std(residuals) < 1e-12:
+        return None
+    return float(skew(residuals)), float(kurtosis(residuals))
+
+
 def profile_dataset(data: pd.DataFrame) -> DatasetProfile:
-    """Extrai um perfil objetivo (estacionariedade, linearidade) de um dataset.
+    """Extrai um perfil objetivo (estacionariedade, linearidade, normalidade) de um dataset.
 
     Nao infere nada que nao seja diretamente testavel a partir dos dados: uma serie
     curta demais para o teste ADF ou para a comparacao preditiva fica com o campo
@@ -282,6 +384,15 @@ def profile_dataset(data: pd.DataFrame) -> DatasetProfile:
             if effect_size is not None
             else None
         )
+        moments = _non_gaussian_moments_for_target(column, numeric_data)
+        if moments is None:
+            residual_skewness, residual_excess_kurtosis, non_gaussian = None, None, None
+        else:
+            residual_skewness, residual_excess_kurtosis = moments
+            non_gaussian = (
+                abs(residual_skewness) > _NON_GAUSSIAN_SKEW_THRESHOLD
+                or abs(residual_excess_kurtosis) > _NON_GAUSSIAN_KURTOSIS_THRESHOLD
+            )
         variables.append(
             VariableProfile(
                 name=str(column),
@@ -289,6 +400,9 @@ def profile_dataset(data: pd.DataFrame) -> DatasetProfile:
                 adf_p_value=adf_p_value,
                 linear=linear,
                 nonlinearity_effect_size=effect_size,
+                non_gaussian=non_gaussian,
+                residual_skewness=residual_skewness,
+                residual_excess_kurtosis=residual_excess_kurtosis,
             )
         )
 

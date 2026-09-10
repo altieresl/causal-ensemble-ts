@@ -129,6 +129,32 @@ class ProfileDatasetTests(unittest.TestCase):
         variable = profile.variables[0]
         self.assertIsNone(variable.stationary)
         self.assertIsNone(variable.linear)
+        self.assertIsNone(variable.non_gaussian)
+
+    def test_flags_gaussian_ar_process_residuals_as_gaussian_compatible(self):
+        data = _linear_stationary_data(n=300)
+        profile = profile_dataset(data)
+        self.assertFalse(profile.mostly_non_gaussian)
+
+    def test_large_sample_gaussian_noise_is_not_a_false_positive(self):
+        # Regressao: um teste de significancia pura (Shapiro-Wilk, p<0.05) rejeitava
+        # normalidade aqui com n=20000 mesmo com skewness/curtose numericamente
+        # identicos a uma gaussiana verdadeira (~0.01/~-0.02) -- o mesmo problema do
+        # RESET para linearidade. O criterio de tamanho de efeito nao deve escalar
+        # com o tamanho da amostra.
+        data = _linear_stationary_data(n=20000, seed=1)
+        profile = profile_dataset(data)
+        self.assertFalse(profile.mostly_non_gaussian)
+
+    def test_flags_uniform_innovations_as_non_gaussian(self):
+        rng = np.random.default_rng(4)
+        n = 1200
+        x = np.zeros(n)
+        for t in range(1, n):
+            x[t] = 0.5 * x[t - 1] + rng.uniform(-0.6, 0.6)
+        data = pd.DataFrame({"x": x})
+        profile = profile_dataset(data)
+        self.assertTrue(profile.mostly_non_gaussian)
 
     def test_query_text_mentions_latent_confounder_limitation(self):
         data = _linear_stationary_data(n=200)

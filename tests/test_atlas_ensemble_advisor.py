@@ -8,6 +8,7 @@ from causal_algorithms_atlas.ensemble_advisor import (
     explain_recommendation,
     recommend_framework_methods,
     select_candidate_methods,
+    select_candidate_methods_with_assumption_flags,
 )
 
 
@@ -21,6 +22,9 @@ def _profile(*, mostly_linear: bool, mostly_stationary: bool) -> DatasetProfile:
             adf_p_value=0.01 if stationary_value else 0.9,
             linear=linear_value,
             nonlinearity_effect_size=0.01 if linear_value else 0.9,
+            non_gaussian=True,
+            residual_skewness=0.0,
+            residual_excess_kurtosis=2.0,
         ),
     )
     return DatasetProfile(n_variables=1, n_timepoints=300, variables=variables)
@@ -85,6 +89,35 @@ class SelectCandidateMethodsTests(unittest.TestCase):
         self.assertNotIn("ClassicalGranger", methods)
         for callable_method in methods.values():
             self.assertTrue(callable(callable_method))
+
+
+class SelectCandidateMethodsWithAssumptionFlagsTests(unittest.TestCase):
+    def test_keeps_assumption_violating_methods_as_flagged_candidates(self):
+        profile = _profile(mostly_linear=False, mostly_stationary=True)
+        recommendations = recommend_framework_methods(profile)
+        flagged = select_candidate_methods_with_assumption_flags(recommendations)
+        # ClassicalGranger exige linearidade e o perfil e nao-linear -- o filtro
+        # rigido o excluiria (ver teste acima), mas o pool ampliado deve mante-lo,
+        # com a violacao registrada em vez de escondida.
+        self.assertIn("ClassicalGranger", flagged)
+        fn, reasons = flagged["ClassicalGranger"]
+        self.assertTrue(callable(fn))
+        self.assertTrue(reasons)
+
+    def test_compliant_methods_have_no_reasons(self):
+        profile = _profile(mostly_linear=True, mostly_stationary=True)
+        recommendations = recommend_framework_methods(profile)
+        flagged = select_candidate_methods_with_assumption_flags(recommendations)
+        _fn, reasons = flagged["ClassicalGranger"]
+        self.assertEqual(reasons, ())
+
+    def test_returns_every_registered_method_regardless_of_compliance(self):
+        profile = _profile(mostly_linear=False, mostly_stationary=False)
+        recommendations = recommend_framework_methods(profile)
+        rigid = select_candidate_methods(recommendations)
+        flagged = select_candidate_methods_with_assumption_flags(recommendations)
+        self.assertGreaterEqual(len(flagged), len(rigid))
+        self.assertEqual(set(flagged), {rec.framework_method_name for rec in recommendations})
 
 
 class ExplainRecommendationTests(unittest.TestCase):

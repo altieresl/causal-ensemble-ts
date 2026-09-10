@@ -11,6 +11,7 @@ from causal_algorithms_atlas.dataset_profile import profile_dataset
 from causal_algorithms_atlas.ensemble_advisor import (
     recommend_framework_methods,
     select_candidate_methods,
+    select_candidate_methods_with_assumption_flags,
 )
 from causal_discovery import (
     compute_undirected_skeleton_metrics,
@@ -59,6 +60,7 @@ def run_experiment(
     ground_truth: pd.DataFrame | None,
     dataset_name: str,
     candidate_method_names: set[str] | None = None,
+    use_assumption_soft_filter: bool = True,
     max_lag: int = 1,
     n_bootstrap: int = 10,
     min_methods: int = 2,
@@ -89,19 +91,42 @@ def run_experiment(
     ``candidate_method_names``, quando informado, restringe ainda mais os
     candidatos recomendados pelo perfil -- uso tipico para iteracoes rapidas com
     poucos metodos antes de escalar para o conjunto completo.
+
+    ``use_assumption_soft_filter`` (default ``True``): quando ``True``, todo
+    metodo verified+implementado entra como candidato, mesmo violando uma
+    premissa estatistica (``select_candidate_methods_with_assumption_flags``) --
+    a violacao fica visivel em ``result["assumption_flags"]`` e em
+    ``result["recommendations"][...]["included"]``, mas quem decide se o metodo
+    sobrevive e a metrica cega de estabilidade sob bootstrap abaixo, nunca
+    ``ground_truth``. Quando ``False``, usa o filtro RIGIDO
+    (``select_candidate_methods``) -- o mesmo usado como gabarito determinístico
+    para avaliar o chat (``causal_algorithms_atlas.chat_recommender``); ver
+    ``.local/apresentacao_09-09.md`` para a justificativa de manter essa versao
+    rigida disponivel.
     """
     profile = profile_dataset(data)
     recommendations = recommend_framework_methods(profile)
-    candidates = select_candidate_methods(recommendations)
+    if use_assumption_soft_filter:
+        flagged_candidates = select_candidate_methods_with_assumption_flags(recommendations)
+        candidates = {name: fn for name, (fn, _reasons) in flagged_candidates.items()}
+        assumption_flags = {
+            name: list(reasons) for name, (_fn, reasons) in flagged_candidates.items() if reasons
+        }
+    else:
+        candidates = select_candidate_methods(recommendations)
+        assumption_flags = {}
     if candidate_method_names is not None:
         candidates = {
             name: fn for name, fn in candidates.items() if name in candidate_method_names
+        }
+        assumption_flags = {
+            name: reasons for name, reasons in assumption_flags.items() if name in candidates
         }
     if len(candidates) < 2:
         excluded = [
             f"{rec.framework_method_name} ({'; '.join(rec.reasons)})"
             for rec in recommendations
-            if not rec.included
+            if rec.framework_method_name not in candidates
         ]
         message = (
             f"Apenas {len(candidates)} metodo(s) do framework sao compativeis com o "
@@ -194,6 +219,16 @@ def run_experiment(
         else None
     )
 
+    all_single_methods_metrics_post_hoc = {
+        name: _post_hoc_metrics(evaluation, ground_truth, prob_threshold=prob_threshold)
+        for name, evaluation in single_evaluations.items()
+    }
+
+    flagged_methods_in_best_combination = sorted(
+        name for name in best_combination if name in assumption_flags
+    )
+    flagged_best_single = best_single_name in assumption_flags
+
     result: dict[str, Any] = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "dataset_name": dataset_name,
@@ -221,28 +256,57 @@ def run_experiment(
             "max_methods": max(effective_max_methods, max(2, min_methods)),
             "min_votes": min_votes,
             "random_state": random_state,
+            "use_assumption_soft_filter": use_assumption_soft_filter,
             "candidate_method_names_filter": (
                 sorted(candidate_method_names) if candidate_method_names is not None else None
             ),
         },
         "candidate_methods": sorted(candidates),
+        "assumption_flags": assumption_flags,
         "single_method_performance_scores": {
             name: float(evaluation["metrics"]["performance_score"])
             for name, evaluation in single_evaluations.items()
         },
+        "all_single_methods_metrics_post_hoc": all_single_methods_metrics_post_hoc,
         "ranking": ranking.to_dict(orient="records"),
         "best_combination": list(best_combination),
         "best_combination_methods": list(best_combination),
         "best_combination_performance_score": float(
             best_evaluation["metrics"]["performance_score"]
         ),
+        "flagged_methods_in_best_combination": flagged_methods_in_best_combination,
         "best_single_method": best_single_name,
         "best_single_performance_score": best_single_performance_score,
+        "best_single_method_assumption_flagged": flagged_best_single,
         "best_combination_metrics_post_hoc": best_combination_metrics,
         "best_single_metrics_post_hoc": best_single_metrics,
         "ensemble_beats_best_single_f1": ensemble_beats_best_single_f1,
         "ground_truth_used_only_for_post_hoc_evaluation": True,
     }
+
+    if assumption_flags:
+        print(
+            f"[run_experiment:{dataset_name}] ⚠ ASSUMPTION FLAGS -- "
+            f"{len(assumption_flags)} candidato(s) mantido(s) apesar de violar uma premissa "
+            "estatistica declarada; sobrevivem ou nao por estabilidade sob bootstrap (metrica "
+            "cega, nunca ground_truth), nao por decisao a priori:"
+        )
+        for name, reasons in assumption_flags.items():
+            in_best = name in flagged_methods_in_best_combination or name == (
+                best_single_name if flagged_best_single else None
+            )
+            marker = "SOBREVIVEU ao ensemble/melhor-sozinho" if in_best else "descartado"
+            print(f"    - {name} [{marker}]: {'; '.join(reasons)}")
+        if flagged_methods_in_best_combination:
+            print(
+                f"[run_experiment:{dataset_name}] best_combination inclui metodo(s) com premissa "
+                f"violada: {flagged_methods_in_best_combination}"
+            )
+        if flagged_best_single:
+            print(
+                f"[run_experiment:{dataset_name}] best_single_method ({best_single_name}) "
+                "tambem tem premissa violada -- venceu mesmo assim pela metrica cega."
+            )
 
     if history_path is not None:
         history_path = Path(history_path)

@@ -85,6 +85,25 @@ def recommend_framework_methods(
                 "Nao assume linearidade -- compativel com o perfil predominantemente nao linear."
             )
 
+        requires_non_gaussian = any(
+            a.id == "non_gaussian_errors" and a.required for a in card.assumptions
+        )
+        if requires_non_gaussian:
+            if profile.mostly_non_gaussian:
+                reasons.append(
+                    "Exige residuos nao gaussianos; em "
+                    f"{profile.non_gaussian_fraction:.0%} das series testadas, skewness ou "
+                    "curtose em excesso dos residuos de um VAR(1) passaram do limiar calibrado."
+                )
+            else:
+                included = False
+                reasons.append(
+                    "Exige residuos nao gaussianos, mas em apenas "
+                    f"{profile.non_gaussian_fraction:.0%} das series testadas skewness/curtose "
+                    "dos residuos passaram do limiar calibrado (identificabilidade da estrutura "
+                    "instantanea fica comprometida com residuos proximos de gaussianos)."
+                )
+
         if not reasons:
             reasons.append(
                 "Nenhuma premissa de estacionariedade/linearidade desta ficha se aplicou "
@@ -106,7 +125,16 @@ def recommend_framework_methods(
 def select_candidate_methods(
     recommendations: list[MethodRecommendation],
 ) -> dict[str, Callable]:
-    """Traduz recomendacoes incluidas em callables prontos para o ensemble."""
+    """Traduz recomendacoes incluidas em callables prontos para o ensemble.
+
+    Filtro RIGIDO: so devolve metodos que passaram em todas as premissas
+    estatisticas verificaveis. Esta e a versao usada como gabarito determinístico
+    (a coluna "Estatistico (correto)" usada pra avaliar o chat) -- precisa
+    continuar binaria e reprodutivel para essa comparacao continuar fazendo
+    sentido. Para alimentar o ensemble de verdade, considerando tambem
+    candidatos que violam uma premissa mas podem se provar robustos sob
+    bootstrap, use ``select_candidate_methods_with_assumption_flags``.
+    """
     from causal_discovery import get_registered_methods
 
     registered = get_registered_methods()
@@ -114,6 +142,42 @@ def select_candidate_methods(
         rec.framework_method_name: registered[rec.framework_method_name]
         for rec in recommendations
         if rec.included and rec.framework_method_name in registered
+    }
+
+
+def select_candidate_methods_with_assumption_flags(
+    recommendations: list[MethodRecommendation],
+) -> dict[str, tuple[Callable, tuple[str, ...]]]:
+    """Pool AMPLIADO de candidatos: todo metodo verified+implementado entra,
+    mesmo violando uma premissa estatistica -- devolvido junto com as razoes
+    da violacao (tupla vazia se nao violou nada).
+
+    Isso existe porque uma premissa estatistica violada ("residuos gaussianos
+    demais para VAR-LiNGAM identificar a estrutura instantanea") nao significa
+    necessariamente que o metodo desempenha mal na pratica -- ja observamos o
+    oposto (VAR-LiNGAM com F1=1.0 num dataset onde a premissa falha, ver
+    ``.local/apresentacao_09-09.md`` Secao 2.4). Em vez de decidir isso de
+    antemao (o que exigiria uma regra ad-hoc tipo "ignore essa premissa"),
+    devolve-se o metodo como candidato E a violacao como um flag visivel; quem
+    decide se ele sobrevive e a metrica cega de estabilidade sob bootstrap de
+    ``causal_discovery.select_robust_ensemble_combination`` (nunca
+    ``ground_truth``) em ``experiment_runner.run_experiment``.
+
+    Isto NAO substitui ``select_candidate_methods``: a versao rigida continua
+    sendo o gabarito usado pra avaliar o chat, exatamente porque uma metrica de
+    avaliacao precisa ser deterministica -- ver a secao correspondente na
+    apresentacao sobre por que esse filtro rigido continua necessario ali.
+    """
+    from causal_discovery import get_registered_methods
+
+    registered = get_registered_methods()
+    return {
+        rec.framework_method_name: (
+            registered[rec.framework_method_name],
+            () if rec.included else rec.reasons,
+        )
+        for rec in recommendations
+        if rec.framework_method_name in registered
     }
 
 
