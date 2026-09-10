@@ -73,12 +73,16 @@ class DatasetProfile:
 
     def to_query_text(self) -> str:
         stationarity_txt = "estacionarias" if self.mostly_stationary else "nao estacionarias"
+        stationarity_pct = (
+            self.stationary_fraction if self.mostly_stationary else 1.0 - self.stationary_fraction
+        )
         linearity_txt = "lineares" if self.mostly_linear else "nao lineares"
+        linearity_pct = self.linear_fraction if self.mostly_linear else 1.0 - self.linear_fraction
         return (
             f"Dataset com {self.n_variables} variaveis e {self.n_timepoints} observacoes. "
-            f"{self.stationary_fraction:.0%} das series testadas sao {stationarity_txt} "
+            f"{stationarity_pct:.0%} das series testadas sao {stationarity_txt} "
             "(teste ADF, alfa=0.05). "
-            f"{self.linear_fraction:.0%} das series testadas tem relacao com o lag 1 de si "
+            f"{linearity_pct:.0%} das series testadas tem relacao com o lag 1 de si "
             f"mesma e das demais variaveis aproximadamente {linearity_txt} (comparando erro "
             "de previsao fora da amostra entre um modelo linear e um modelo com termos "
             "quadraticos). "

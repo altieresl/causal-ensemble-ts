@@ -32,7 +32,9 @@ class TfidfRetrieverTests(unittest.TestCase):
         self.assertEqual(scores, sorted(scores, reverse=True))
 
     def test_query_about_latent_confounders_surfaces_lpcmci_or_fci(self):
-        results = self.retriever.top_k("qual metodo tolera confundidor latente nao observado", k=5)
+        # As fichas em algorithms/*.md estao em ingles (fonte de verdade unica);
+        # a consulta precisa estar no mesmo idioma para o TF-IDF encontrar sobreposicao lexical.
+        results = self.retriever.top_k("which method tolerates unobserved latent confounders", k=5)
         surfaced_ids = {chunk.algorithm_id for chunk, _ in results}
         self.assertTrue(surfaced_ids & {"lpcmci", "fci"})
 
