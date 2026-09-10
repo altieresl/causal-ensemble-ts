@@ -62,10 +62,13 @@ def call_ollama(
     model: str = _DEFAULT_MODEL,
     base_url: str = _DEFAULT_BASE_URL,
     format: str | dict | None = None,
+    options: dict | None = None,
 ) -> str:
     payload_dict: dict[str, object] = {"model": model, "prompt": prompt, "stream": False}
     if format is not None:
         payload_dict["format"] = format
+    if options is not None:
+        payload_dict["options"] = options
     payload = json.dumps(payload_dict).encode("utf-8")
     request = Request(
         f"{base_url}/api/generate",

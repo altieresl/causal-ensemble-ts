@@ -76,6 +76,15 @@ def _catalog_text(algorithms_dir: str | Path, names: list[str]) -> str:
     As fichas em ``algorithms/*.md`` sao a fonte de verdade unica das premissas
     (``loader.load_algorithm_cards``), a mesma usada por
     ``recommend_framework_methods``. Nada e duplicado ou traduzido a mao.
+
+    So mostra estacionariedade/linearidade (computadas com a mesma logica de
+    ``recommend_framework_methods``), nao a secao "Assumptions" inteira. Um
+    teste de ablacao mostrou que mostrar outras premissas da ficha que o schema
+    nunca usa (``causal_sufficiency``, ``faithfulness``, ...) faz o modelo
+    excluir o metodo mesmo quando os dois booleanos que de fato importam saem
+    corretos -- ex.: o LPCMCI (nao exige causal_sufficiency) era excluido de
+    forma deterministica ate essa linha ser removida do prompt; nem o nome do
+    metodo nem o texto da "Core idea" tinham qualquer efeito no teste.
     """
     cards = load_algorithm_cards(algorithms_dir)
     by_method = {c.framework_method_name: c for c in cards.values()}
@@ -83,8 +92,19 @@ def _catalog_text(algorithms_dir: str | Path, names: list[str]) -> str:
     for name in names:
         card = by_method[name]
         idea = card.sections.get("Core idea", "").strip()
-        premissas = card.sections.get("Assumptions", "").strip()
-        blocks.append(f'### "{name}"\nCore idea: {idea}\nAssumptions: {premissas}')
+        requires_stationarity = any(
+            a.id == "stationarity" and a.required for a in card.assumptions
+        )
+        requires_linearity = any(a.id == "linearity" and a.required for a in card.assumptions)
+        stat_verdict = "REQUIRED" if requires_stationarity else "NOT required"
+        lin_verdict = "REQUIRED" if requires_linearity else "NOT required"
+        blocks.append(
+            f'### "{name}"\n'
+            f"Core idea: {idea}\n"
+            f"Assumptions relevant to this decision:\n"
+            f"- Stationarity: {stat_verdict}\n"
+            f"- Linearity: {lin_verdict}"
+        )
     return "\n\n".join(blocks)
 
 
@@ -297,6 +317,13 @@ def recommend_methods_via_chat(
     copiado errado ou ``include`` que nao bate com os proprios booleanos
     declarados). Isso nunca "corrige" o julgamento do modelo -- so pede de novo
     quando a resposta contradiz fatos que o Python ja sabe com certeza.
+
+    ``temperature=0`` (decodificacao gulosa) foi testado e descartado: um teste
+    isolado (4 metodos, 1 dataset) sugeriu que eliminava ruido de amostragem, mas
+    a regressao completa (4 datasets) mostrou o oposto -- mais decisoes erradas
+    (7/32) que a amostragem padrao do Ollama (2/32), porque travar na resposta
+    "gulosa" do modelo tambem trava em erros deterministicos que a amostragem
+    padrao as vezes evita por acaso. Mantido sem `options` (amostragem padrao).
     """
     from causal_algorithms_atlas import rag_chat
 
