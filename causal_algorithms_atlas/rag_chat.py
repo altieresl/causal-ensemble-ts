@@ -61,7 +61,7 @@ def call_ollama(
     *,
     model: str = _DEFAULT_MODEL,
     base_url: str = _DEFAULT_BASE_URL,
-    format: str | None = None,
+    format: str | dict | None = None,
 ) -> str:
     payload_dict: dict[str, object] = {"model": model, "prompt": prompt, "stream": False}
     if format is not None:

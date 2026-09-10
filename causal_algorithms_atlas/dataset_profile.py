@@ -72,18 +72,20 @@ class DatasetProfile:
         return self.linear_fraction >= 0.5
 
     def to_query_text(self) -> str:
-        stationarity_txt = "estacionarias" if self.mostly_stationary else "nao estacionarias"
-        stationarity_pct = (
-            self.stationary_fraction if self.mostly_stationary else 1.0 - self.stationary_fraction
-        )
-        linearity_txt = "lineares" if self.mostly_linear else "nao lineares"
-        linearity_pct = self.linear_fraction if self.mostly_linear else 1.0 - self.linear_fraction
+        # Declara as duas fracoes (estacionaria/nao, linear/nao) sempre explicitamente,
+        # em vez de rotular condicionalmente uma so -- uma versao anterior imprimia
+        # sempre stationary_fraction mas trocava o rotulo conforme mostly_stationary,
+        # invertendo o sentido da frase sempre que a maioria era "nao estacionaria"
+        # (ex.: dizia "33% sao nao estacionarias" quando na verdade eram 67%). Declarar
+        # os dois lados remove essa ambiguidade tanto para leitura humana quanto para
+        # um LLM que precise copiar o numero certo sem fazer a conta de "100 - X".
         return (
             f"Dataset com {self.n_variables} variaveis e {self.n_timepoints} observacoes. "
-            f"{stationarity_pct:.0%} das series testadas sao {stationarity_txt} "
-            "(teste ADF, alfa=0.05). "
-            f"{linearity_pct:.0%} das series testadas tem relacao com o lag 1 de si "
-            f"mesma e das demais variaveis aproximadamente {linearity_txt} (comparando erro "
+            f"{self.stationary_fraction:.0%} das series testadas sao estacionarias e "
+            f"{1.0 - self.stationary_fraction:.0%} nao sao (teste ADF, alfa=0.05). "
+            f"{self.linear_fraction:.0%} das series testadas tem relacao com o lag 1 de si "
+            f"mesma e das demais variaveis aproximadamente linear, e "
+            f"{1.0 - self.linear_fraction:.0%} nao tem (comparando erro "
             "de previsao fora da amostra entre um modelo linear e um modelo com termos "
             "quadraticos). "
             "Confundidores latentes nao sao verificaveis apenas a partir dos dados observados "
