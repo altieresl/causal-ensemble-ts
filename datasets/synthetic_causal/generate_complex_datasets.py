@@ -12,6 +12,14 @@ pressionando um eixo diferente do perfil (dataset_profile.DatasetProfile):
   ainda predominantemente linear, mas com percentuais bem menos limpos que
   toy_a (100%), para testar se o chat se deixa enganar pela minoria nao linear
   mencionada no perfil.
+- toy_e_boundary_mixed: pressiona os dois eixos ao mesmo tempo, e a
+  estacionariedade fica perto da fronteira de 50% (do lado "nao majoritario",
+  nao exatamente em cima) em vez de claramente de um lado como no toy_c (33%).
+  A nao linearidade tambem aparece em variaveis diferentes das que carregam a
+  nao estacionariedade -- os dois problemas nao andam juntos nas mesmas series.
+  Testa se o chat aplica a comparacao ">=50%" corretamente quando a maioria
+  nao e obvia, em vez de reagir so a "tem serie nao estacionaria/nao linear
+  mencionada no perfil".
 
 Mesmo formato de saida de synthetic_causal_datasets.ipynb: CSV de dados e CSV de
 ground truth com colunas Edge/Direct/Coefficient/Lag/Type.
@@ -92,6 +100,43 @@ def generate_toy_d_mixed_nonlinear(T: int = 1200, seed: int = 7) -> tuple[pd.Dat
     return data, ground_truth
 
 
+def generate_toy_e_boundary_mixed(T: int = 1300, seed: int = 99) -> tuple[pd.DataFrame, pd.DataFrame]:
+    rng = np.random.default_rng(seed)
+
+    x0 = np.zeros(T)  # random walk (raiz unitaria) -- nao estacionaria, raiz
+    x1 = np.zeros(T)  # AR(1) estavel -- estacionaria, raiz
+    x2 = np.zeros(T)  # linear de X0 -- nao estacionaria (herda)
+    x3 = np.zeros(T)  # linear de X0 -- nao estacionaria (herda, 2o filho de X0)
+    x4 = np.zeros(T)  # linear de X1 -- estacionaria
+    x5 = np.zeros(T)  # tanh de X1 -- estacionaria, mas nao linear
+    y = np.zeros(T)  # X2 (linear) + tanh(X4) (nao linear) -- nao estacionaria (herda de X2)
+
+    for t in range(1, T):
+        x0[t] = x0[t - 1] + rng.normal(0, 0.3)
+        x1[t] = 0.4 * x1[t - 1] + rng.normal(0, 0.5)
+        x2[t] = 0.6 * x0[t - 1] + rng.normal(0, 0.4)
+        x3[t] = 0.5 * x0[t - 1] + rng.normal(0, 0.4)
+        x4[t] = 0.5 * x1[t - 1] + rng.normal(0, 0.4)
+        x5[t] = 1.1 * np.tanh(2.2 * x1[t - 1]) + rng.normal(0, 0.35)
+        y[t] = 0.5 * x2[t - 1] + 0.9 * np.tanh(2.0 * x4[t - 1]) + rng.normal(0, 0.45)
+
+    data = pd.DataFrame({"X0": x0, "X1": x1, "X2": x2, "X3": x3, "X4": x4, "X5": x5, "Y": y})
+
+    ground_truth = pd.DataFrame(
+        [
+            {"Edge": "X0 → X2", "Direct": True, "Coefficient": 0.6, "Lag": 1.0, "Type": "linear"},
+            {"Edge": "X0 → X3", "Direct": True, "Coefficient": 0.5, "Lag": 1.0, "Type": "linear"},
+            {"Edge": "X1 → X4", "Direct": True, "Coefficient": 0.5, "Lag": 1.0, "Type": "linear"},
+            {"Edge": "X1 → X5", "Direct": True, "Coefficient": 1.1, "Lag": 1.0, "Type": "nonlinear (tanh)"},
+            {"Edge": "X2 → Y", "Direct": True, "Coefficient": 0.5, "Lag": 1.0, "Type": "linear"},
+            {"Edge": "X4 → Y", "Direct": True, "Coefficient": 0.9, "Lag": 1.0, "Type": "nonlinear (tanh)"},
+            {"Edge": "X0 → Y", "Direct": False, "Coefficient": None, "Lag": None, "Type": "indirect via X2"},
+            {"Edge": "X1 → Y", "Direct": False, "Coefficient": None, "Lag": None, "Type": "indirect via X4"},
+        ]
+    )
+    return data, ground_truth
+
+
 if __name__ == "__main__":
     data_c, gt_c = generate_toy_c_nonstationary()
     data_c.to_csv(OUT_DIR / "toy_c_nonstationary.csv", index=False)
@@ -101,4 +146,11 @@ if __name__ == "__main__":
     data_d.to_csv(OUT_DIR / "toy_d_mixed_nonlinear.csv", index=False)
     gt_d.to_csv(OUT_DIR / "toy_d_mixed_nonlinear_gt.csv", index=False)
 
-    print("OK: toy_c_nonstationary.csv/gt e toy_d_mixed_nonlinear.csv/gt gerados em", OUT_DIR)
+    data_e, gt_e = generate_toy_e_boundary_mixed()
+    data_e.to_csv(OUT_DIR / "toy_e_boundary_mixed.csv", index=False)
+    gt_e.to_csv(OUT_DIR / "toy_e_boundary_mixed_gt.csv", index=False)
+
+    print(
+        "OK: toy_c_nonstationary, toy_d_mixed_nonlinear e toy_e_boundary_mixed "
+        f"(csv/gt) gerados em {OUT_DIR}"
+    )

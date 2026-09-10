@@ -15,13 +15,13 @@ _ALGORITHMS_DIR = Path(__file__).resolve().parent / "algorithms"
 class MethodDecision:
     """Decisao do chat sobre um unico algoritmo, com o prompt/resposta que a geraram.
 
-    Os quatro campos booleanos/numericos antes de ``include`` sao preenchidos
-    pelo proprio LLM, forcados pelo JSON Schema em ``_METHOD_JSON_SCHEMA`` --
-    nao sao calculados em Python. A ideia e obrigar o modelo a *reescrever* a
-    porcentagem relevante e compara-la a 50% explicitamente, em vez de reagir
-    so a palavra "nao estacionario"/"nao linear" aparecendo em algum lugar do
-    prompt (foi essa confusao que causou exclusoes em massa incorretas na
-    versao anterior, sem esses campos).
+    Os seis campos booleanos/numericos antes de ``include`` sao preenchidos pelo
+    proprio LLM, forcados pelo JSON Schema em ``_METHOD_JSON_SCHEMA`` -- nao sao
+    calculados em Python. A ideia e obrigar o modelo a *reescrever* a porcentagem
+    relevante e compara-la a 50% explicitamente, em vez de reagir so a palavra
+    "non-stationary"/"non-linear" aparecendo em algum lugar do prompt (foi essa
+    confusao que causou exclusoes em massa incorretas na versao anterior, sem
+    esses campos).
     """
 
     name: str
@@ -56,7 +56,6 @@ class ChatMethodSelection:
     included: tuple[str, ...]
     excluded: tuple[str, ...]
     justification: str
-    language: str
     decisions: tuple[MethodDecision, ...]
 
 
@@ -71,17 +70,13 @@ def _known_methods(algorithms_dir: str | Path) -> list[str]:
     )
 
 
-def _catalog_text(algorithms_dir: str | Path, names: list[str], language: str) -> str:
+def _catalog_text(algorithms_dir: str | Path, names: list[str]) -> str:
     """Monta a descricao de um ou mais algoritmos a partir das fichas reais.
 
     As fichas em ``algorithms/*.md`` sao a fonte de verdade unica das premissas
     (``loader.load_algorithm_cards``), a mesma usada por
-    ``recommend_framework_methods``. O idioma so muda os *rotulos* das secoes
-    no prompt (para portugues, quando ``language="pt"``); o conteudo (Core
-    idea/Assumptions) nunca e duplicado ou traduzido a mao.
+    ``recommend_framework_methods``. Nada e duplicado ou traduzido a mao.
     """
-    idea_label = "Ideia central" if language == "pt" else "Core idea"
-    premises_label = "Premissas" if language == "pt" else "Assumptions"
     cards = load_algorithm_cards(algorithms_dir)
     by_method = {c.framework_method_name: c for c in cards.values()}
     blocks = []
@@ -89,29 +84,40 @@ def _catalog_text(algorithms_dir: str | Path, names: list[str], language: str) -
         card = by_method[name]
         idea = card.sections.get("Core idea", "").strip()
         premissas = card.sections.get("Assumptions", "").strip()
-        blocks.append(f'### "{name}"\n{idea_label}: {idea}\n{premises_label}: {premissas}')
+        blocks.append(f'### "{name}"\nCore idea: {idea}\nAssumptions: {premissas}')
     return "\n\n".join(blocks)
 
 
-def _profile_text_en(profile: DatasetProfile) -> str:
-    # Mirrors DatasetProfile.to_query_text(): always state both fractions explicitly
-    # (stationary and non-stationary, linear and non-linear) so a reader -- human or
-    # LLM -- never has to compute "100 - X" to know the number for the "not" case.
+def _profile_text(profile: DatasetProfile) -> str:
+    """Descreve o perfil agregado em formato ``chave = valor``.
+
+    Uma versao anterior usava uma frase em prosa ("43% ... are stationary and
+    57% are not"). Mesmo declarando as duas fracoes explicitamente, o modelo
+    (qwen2.5:7b) trocava sistematicamente qual dos dois numeros copiar para o
+    campo ``stationary_fraction_pct`` do schema -- persistente mesmo apos
+    retry, em datasets onde a fracao estava perto de 50% (ver
+    toy_e_boundary_mixed no historico de testes). O formato ``chave = valor``
+    abaixo usa os MESMOS nomes dos campos do JSON Schema, eliminando a
+    necessidade de o modelo re-interpretar uma frase em linguagem natural para
+    saber qual numero pertence a qual rotulo.
+    """
+    stationary_pct = profile.stationary_fraction * 100
+    linear_pct = profile.linear_fraction * 100
     return (
         f"Dataset with {profile.n_variables} variables and {profile.n_timepoints} "
-        f"observations. {profile.stationary_fraction:.0%} of the tested series are "
-        f"stationary and {1.0 - profile.stationary_fraction:.0%} are not (ADF test, "
-        f"alpha=0.05). {profile.linear_fraction:.0%} of the tested series have an "
-        f"approximately linear relationship with lag 1 of themselves and the other "
-        f"variables, and {1.0 - profile.linear_fraction:.0%} do not (comparing "
-        "out-of-sample forecast error between a linear model and a model with "
-        "quadratic terms). Latent confounders cannot be verified from observational "
-        "data alone (an identifiability limit, not a measurement of this profile). "
-        "Which causal discovery algorithms are best suited to this profile?"
+        "observations. Stationarity tested via ADF (alpha=0.05); linearity tested "
+        "via out-of-sample forecast effect size (linear vs. quadratic model on lag "
+        "1 of all variables). Latent confounders cannot be verified from "
+        "observational data alone (an identifiability limit, not a measurement of "
+        "this profile).\n"
+        f"stationary_percentage = {stationary_pct:.0f}\n"
+        f"non_stationary_percentage = {100.0 - stationary_pct:.0f}\n"
+        f"linear_percentage = {linear_pct:.0f}\n"
+        f"non_linear_percentage = {100.0 - linear_pct:.0f}"
     )
 
 
-def _variable_detail_text(profile: DatasetProfile, language: str) -> str:
+def _variable_detail_text(profile: DatasetProfile) -> str:
     """Detalha estacionariedade/linearidade por variavel, nao so o agregado.
 
     ``recommend_framework_methods`` decide olhando o agregado (``mostly_*``),
@@ -121,30 +127,17 @@ def _variable_detail_text(profile: DatasetProfile, language: str) -> str:
     """
     lines = []
     for variable in profile.variables:
-        if language == "pt":
-            if variable.stationary is None:
-                stat = "estacionariedade nao testavel (serie curta demais)"
-            else:
-                verdict = "estacionaria" if variable.stationary else "nao estacionaria"
-                stat = f"{verdict} (ADF p={variable.adf_p_value:.3f})"
-            if variable.linear is None:
-                lin = "linearidade nao testavel"
-            else:
-                verdict = "linear" if variable.linear else "nao linear"
-                lin = f"{verdict} (efeito de nao linearidade={variable.nonlinearity_effect_size:.4f})"
-            lines.append(f"- {variable.name}: {stat}; {lin}")
+        if variable.stationary is None:
+            stat = "stationarity not testable (series too short)"
         else:
-            if variable.stationary is None:
-                stat = "stationarity not testable (series too short)"
-            else:
-                verdict = "stationary" if variable.stationary else "non-stationary"
-                stat = f"{verdict} (ADF p={variable.adf_p_value:.3f})"
-            if variable.linear is None:
-                lin = "linearity not testable"
-            else:
-                verdict = "linear" if variable.linear else "non-linear"
-                lin = f"{verdict} (nonlinearity effect size={variable.nonlinearity_effect_size:.4f})"
-            lines.append(f"- {variable.name}: {stat}; {lin}")
+            verdict = "stationary" if variable.stationary else "non-stationary"
+            stat = f"{verdict} (ADF p={variable.adf_p_value:.3f})"
+        if variable.linear is None:
+            lin = "linearity not testable"
+        else:
+            verdict = "linear" if variable.linear else "non-linear"
+            lin = f"{verdict} (nonlinearity effect size={variable.nonlinearity_effect_size:.4f})"
+        lines.append(f"- {variable.name}: {stat}; {lin}")
     return "\n".join(lines)
 
 
@@ -153,7 +146,7 @@ _METHOD_JSON_SCHEMA = {
     "properties": {
         "stationary_fraction_pct": {
             "type": "number",
-            "description": "The exact percentage of series reported as stationary in the aggregate dataset profile above (0-100).",
+            "description": "Copy the value of stationary_percentage exactly as given in the aggregate dataset profile above (0-100). Do NOT copy non_stationary_percentage here.",
         },
         "dataset_is_majority_stationary": {
             "type": "boolean",
@@ -161,7 +154,7 @@ _METHOD_JSON_SCHEMA = {
         },
         "linear_fraction_pct": {
             "type": "number",
-            "description": "The exact percentage of series reported as linear in the aggregate dataset profile above (0-100).",
+            "description": "Copy the value of linear_percentage exactly as given in the aggregate dataset profile above (0-100). Do NOT copy non_linear_percentage here.",
         },
         "dataset_is_majority_linear": {
             "type": "boolean",
@@ -193,45 +186,20 @@ _METHOD_JSON_SCHEMA = {
     ],
 }
 
-_METHOD_PROMPT_PT = (
-    "Voce e um assistente que decide se UM algoritmo de causal discovery deve "
-    "entrar em um ensemble, dado o perfil do dataset abaixo. Voce nao tem acesso "
-    "ao grafo causal real (ground truth) e nao deve supor nada alem do que foi "
-    "fornecido.\n\n"
-    "Perfil agregado do dataset: {profile_text}\n\n"
-    "Perfil por variavel:\n{variable_detail}\n\n"
-    "Algoritmo em avaliacao:\n{catalog_text}\n\n"
-    "Tarefa: preencha cada campo do JSON na ordem abaixo, um de cada vez:\n"
-    "1. Copie a porcentagem exata de series estacionarias do perfil agregado acima.\n"
-    "2. Diga se essa porcentagem e >= 50 (maioria estacionaria).\n"
-    "3. Copie a porcentagem exata de series lineares do perfil agregado acima.\n"
-    "4. Diga se essa porcentagem e >= 50 (maioria linear).\n"
-    "5. Olhando SO a secao de premissas do algoritmo acima, diga se ele exige "
-    "estacionariedade obrigatoriamente.\n"
-    "6. Olhando SO a secao de premissas do algoritmo acima, diga se ele exige "
-    "linearidade obrigatoriamente.\n"
-    "7. Inclua o algoritmo apenas se nenhuma premissa obrigatoria dele for "
-    "violada pela maioria calculada nos passos 2 e 4 (uma premissa so e violada "
-    "se o algoritmo a exige E a maioria correspondente for falsa).\n"
-    "8. Justifique em uma frase curta.\n\n"
-    "Responda SOMENTE com um objeto JSON, sem nenhum texto antes ou depois."
-)
-
-_METHOD_PROMPT_EN = (
+_METHOD_PROMPT = (
     "You are an assistant that decides whether ONE causal discovery algorithm "
     "should be included in an ensemble, given the dataset profile below. You do "
     "not have access to the true causal graph (ground truth) and must not "
     "assume anything beyond what is provided.\n\n"
-    "Aggregate dataset profile: {profile_text}\n\n"
+    "Aggregate dataset profile:\n{profile_text}\n\n"
     "Per-variable profile:\n{variable_detail}\n\n"
     "Algorithm under evaluation:\n{catalog_text}\n\n"
     "Task: fill in each JSON field below, one at a time, in order:\n"
-    "1. Copy the exact percentage of stationary series from the aggregate "
-    "profile above.\n"
-    "2. State whether that percentage is >= 50 (majority stationary).\n"
-    "3. Copy the exact percentage of linear series from the aggregate profile "
+    "1. Copy the value of stationary_percentage from the aggregate profile "
     "above.\n"
-    "4. State whether that percentage is >= 50 (majority linear).\n"
+    "2. State whether that value is >= 50 (majority stationary).\n"
+    "3. Copy the value of linear_percentage from the aggregate profile above.\n"
+    "4. State whether that value is >= 50 (majority linear).\n"
     "5. Looking ONLY at the algorithm's Assumptions section above, state "
     "whether it mandatorily requires stationarity.\n"
     "6. Looking ONLY at the algorithm's Assumptions section above, state "
@@ -245,20 +213,11 @@ _METHOD_PROMPT_EN = (
 )
 
 
-def _build_method_prompt(
-    profile: DatasetProfile, algorithms_dir: str | Path, language: str, method_name: str
-) -> str:
-    if language == "pt":
-        profile_text = profile.to_query_text()
-        template = _METHOD_PROMPT_PT
-    elif language == "en":
-        profile_text = _profile_text_en(profile)
-        template = _METHOD_PROMPT_EN
-    else:
-        raise ValueError(f"Idioma nao suportado: {language!r} (use 'pt' ou 'en').")
-    variable_detail = _variable_detail_text(profile, language)
-    catalog_text = _catalog_text(algorithms_dir, [method_name], language)
-    return template.format(
+def _build_method_prompt(profile: DatasetProfile, algorithms_dir: str | Path, method_name: str) -> str:
+    profile_text = _profile_text(profile)
+    variable_detail = _variable_detail_text(profile)
+    catalog_text = _catalog_text(algorithms_dir, [method_name])
+    return _METHOD_PROMPT.format(
         profile_text=profile_text, variable_detail=variable_detail, catalog_text=catalog_text
     )
 
@@ -321,7 +280,6 @@ def recommend_methods_via_chat(
     *,
     algorithms_dir: str | Path = _ALGORITHMS_DIR,
     model: str = "qwen2.5:7b",
-    language: str = "pt",
     max_retries: int = 1,
 ) -> ChatMethodSelection:
     """Pede ao chat local (Ollama) para decidir, um algoritmo por vez, quais
@@ -345,7 +303,7 @@ def recommend_methods_via_chat(
     names = _known_methods(algorithms_dir)
     decisions: list[MethodDecision] = []
     for name in names:
-        prompt = _build_method_prompt(profile, algorithms_dir, language, name)
+        prompt = _build_method_prompt(profile, algorithms_dir, name)
         retried = False
         for attempt in range(max_retries + 1):
             raw_response = rag_chat.call_ollama(prompt, model=model, format=_METHOD_JSON_SCHEMA)
@@ -377,6 +335,5 @@ def recommend_methods_via_chat(
         included=included,
         excluded=excluded,
         justification=justification,
-        language=language,
         decisions=tuple(decisions),
     )
