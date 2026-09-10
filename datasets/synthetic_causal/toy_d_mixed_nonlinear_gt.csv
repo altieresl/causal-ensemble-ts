@@ -1,0 +1,7 @@
+Edge,Direct,Coefficient,Lag,Type
+X4 → X1,True,0.5,1.0,nonlinear (tanh)
+X1 → X3,True,0.35,1.0,nonlinear (interaction)
+X2 → X3,True,0.35,1.0,nonlinear (interaction)
+X1 → Y,True,0.6,1.0,linear
+X3 → Y,True,0.4,1.0,linear
+X0 → Y,False,0.0,,none (noise)

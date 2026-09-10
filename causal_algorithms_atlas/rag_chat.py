@@ -57,9 +57,16 @@ def build_prompt(query: str, retrieved: list[tuple[Chunk, float]]) -> str:
 
 
 def call_ollama(
-    prompt: str, *, model: str = _DEFAULT_MODEL, base_url: str = _DEFAULT_BASE_URL
+    prompt: str,
+    *,
+    model: str = _DEFAULT_MODEL,
+    base_url: str = _DEFAULT_BASE_URL,
+    format: str | None = None,
 ) -> str:
-    payload = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode("utf-8")
+    payload_dict: dict[str, object] = {"model": model, "prompt": prompt, "stream": False}
+    if format is not None:
+        payload_dict["format"] = format
+    payload = json.dumps(payload_dict).encode("utf-8")
     request = Request(
         f"{base_url}/api/generate",
         data=payload,
