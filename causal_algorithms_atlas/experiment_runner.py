@@ -69,6 +69,7 @@ def run_experiment(
     random_state: int = 42,
     history_path: str | Path | None = None,
     prob_threshold: float = 0.5,
+    declared_causal_sufficiency: bool | None = None,
     **selection_kwargs: Any,
 ) -> dict[str, Any]:
     """Roda um ciclo completo: perfilar -> recomendar -> selecionar -> avaliar.
@@ -92,6 +93,12 @@ def run_experiment(
     candidatos recomendados pelo perfil -- uso tipico para iteracoes rapidas com
     poucos metodos antes de escalar para o conjunto completo.
 
+    ``declared_causal_sufficiency`` (default ``None``): forwarded as-is to
+    ``recommend_framework_methods`` -- see its docstring. ``None`` (the default)
+    preserves prior behavior exactly; only pass ``True``/``False`` for a REAL
+    dataset where a domain expert has stated a belief about unmeasured confounders,
+    never derived from a synthetic dataset's known generator.
+
     ``use_assumption_soft_filter`` (default ``True``): quando ``True``, todo
     metodo verified+implementado entra como candidato, mesmo violando uma
     premissa estatistica (``select_candidate_methods_with_assumption_flags``) --
@@ -105,7 +112,9 @@ def run_experiment(
     rigida disponivel.
     """
     profile = profile_dataset(data)
-    recommendations = recommend_framework_methods(profile)
+    recommendations = recommend_framework_methods(
+        profile, declared_causal_sufficiency=declared_causal_sufficiency
+    )
     if use_assumption_soft_filter:
         flagged_candidates = select_candidate_methods_with_assumption_flags(recommendations)
         candidates = {name: fn for name, (fn, _reasons) in flagged_candidates.items()}
@@ -257,6 +266,7 @@ def run_experiment(
             "min_votes": min_votes,
             "random_state": random_state,
             "use_assumption_soft_filter": use_assumption_soft_filter,
+            "declared_causal_sufficiency": declared_causal_sufficiency,
             "candidate_method_names_filter": (
                 sorted(candidate_method_names) if candidate_method_names is not None else None
             ),

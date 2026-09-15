@@ -61,6 +61,72 @@ class RecommendFrameworkMethodsTests(unittest.TestCase):
         for rec in recommendations:
             self.assertTrue(rec.reasons)
 
+    def test_unknown_causal_sufficiency_does_not_exclude_by_default(self):
+        # declared_causal_sufficiency=None (default): comportamento identico ao de
+        # antes desse parametro existir -- GES/PCMCI exigem suficiencia causal, mas
+        # como ela nao e verificavel a partir dos dados, nao declarar nada NAO deve
+        # virar uma exclusao (isso seria tratar "desconhecido" como "violado").
+        profile = _profile(mostly_linear=True, mostly_stationary=True)
+        recommendations = recommend_framework_methods(profile)
+        by_name = {r.framework_method_name: r for r in recommendations}
+        self.assertTrue(by_name["GES"].included)
+        self.assertTrue(by_name["PCMCI"].included)
+        self.assertTrue(
+            any("nao e verificavel" in reason for reason in by_name["GES"].reasons)
+        )
+
+    def test_declared_causal_sufficiency_true_includes_with_reason(self):
+        profile = _profile(mostly_linear=True, mostly_stationary=True)
+        recommendations = recommend_framework_methods(
+            profile, declared_causal_sufficiency=True
+        )
+        by_name = {r.framework_method_name: r for r in recommendations}
+        self.assertTrue(by_name["GES"].included)
+        self.assertTrue(
+            any("declarada como satisfeita" in reason for reason in by_name["GES"].reasons)
+        )
+
+    def test_declared_causal_sufficiency_false_excludes_dependent_methods(self):
+        profile = _profile(mostly_linear=True, mostly_stationary=True)
+        recommendations = recommend_framework_methods(
+            profile, declared_causal_sufficiency=False
+        )
+        by_name = {r.framework_method_name: r for r in recommendations}
+        self.assertFalse(by_name["GES"].included)
+        self.assertFalse(by_name["PCMCI"].included)
+        self.assertTrue(
+            any("declarada como violada" in reason for reason in by_name["GES"].reasons)
+        )
+        # FCI/LPCMCI nao exigem suficiencia causal -- nao devem ser afetados por essa
+        # declaracao, seja qual for o valor.
+        self.assertTrue(by_name["FCI"].included)
+        self.assertTrue(by_name["LPCMCI"].included)
+
+    def test_handles_latent_confounders_methods_carry_advisory_note(self):
+        profile = _profile(mostly_linear=True, mostly_stationary=True)
+        recommendations = recommend_framework_methods(profile)
+        by_name = {r.framework_method_name: r for r in recommendations}
+        self.assertTrue(
+            any(
+                "confundidores latentes nao verificados" in reason
+                for reason in by_name["FCI"].reasons
+            )
+        )
+        self.assertTrue(
+            any(
+                "confundidores latentes nao verificados" in reason
+                for reason in by_name["LPCMCI"].reasons
+            )
+        )
+        # DYNOTEARS nao declara suficiencia causal nem lida com confundidores latentes
+        # -- nao deve ganhar nenhuma nota nova sobre o assunto.
+        self.assertFalse(
+            any(
+                "confundidor" in reason.lower()
+                for reason in by_name["DYNOTEARS"].reasons
+            )
+        )
+
     def test_covers_all_eight_framework_methods(self):
         profile = _profile(mostly_linear=True, mostly_stationary=True)
         recommendations = recommend_framework_methods(profile)

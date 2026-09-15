@@ -32,7 +32,25 @@ def recommend_framework_methods(
     profile: DatasetProfile,
     *,
     algorithms_dir: str | Path = _ALGORITHMS_DIR,
+    declared_causal_sufficiency: bool | None = None,
 ) -> list[MethodRecommendation]:
+    """
+    ``declared_causal_sufficiency`` (default ``None``): whether all relevant common
+    causes of the observed variables are believed to have been measured (no relevant
+    latent confounder). Deliberately NOT part of ``DatasetProfile``/
+    ``dataset_profile.profile_dataset``: causal sufficiency is not verifiable from
+    observational data alone, an identifiability limit stated in Spirtes, Glymour &
+    Scheines, *Causation, Prediction, and Search* (2000, Ch. 6) and the explicit
+    motivation for FCI's design (Spirtes, Meek & Richardson, 1995, "Causal Inference
+    in the Presence of Latent Variables and Selection Bias", UAI). ``None`` (the
+    default, and the only value every existing caller uses) keeps behavior identical
+    to before this parameter existed -- a method requiring causal sufficiency is
+    still included, with a reason noting the assumption is unverified either way.
+    Pass ``True``/``False`` only when a domain expert has stated a belief about a
+    REAL dataset being analyzed; never derive this from a synthetic generator's known
+    ground truth (that would leak the answer key into a decision later scored
+    against it).
+    """
     cards = load_algorithm_cards(algorithms_dir)
     recommendations: list[MethodRecommendation] = []
 
@@ -83,6 +101,37 @@ def recommend_framework_methods(
         elif card.handles_nonlinearity and not profile.mostly_linear:
             reasons.append(
                 "Nao assume linearidade -- compativel com o perfil predominantemente nao linear."
+            )
+
+        requires_causal_sufficiency = any(
+            a.id == "causal_sufficiency" and a.required for a in card.assumptions
+        )
+        if requires_causal_sufficiency:
+            if declared_causal_sufficiency is None:
+                reasons.append(
+                    "Exige suficiencia causal (nenhum confundidor latente relevante); isso "
+                    "nao e verificavel a partir dos dados observados (limite de "
+                    "identificabilidade -- Spirtes, Glymour & Scheines, 2000). Nao foi "
+                    "declarado conhecimento de dominio sobre isso para este dataset; "
+                    "tratado como nao violado por padrao, mas o resultado deste metodo "
+                    "deve ser lido com essa ressalva."
+                )
+            elif declared_causal_sufficiency:
+                reasons.append(
+                    "Exige suficiencia causal; declarada como satisfeita para este dataset "
+                    "por conhecimento de dominio (nao medida a partir dos dados)."
+                )
+            else:
+                included = False
+                reasons.append(
+                    "Exige suficiencia causal, mas foi declarada como violada (confundidor "
+                    "latente conhecido) para este dataset."
+                )
+        elif card.handles_latent_confounders:
+            reasons.append(
+                "Lida nativamente com confundidores latentes nao verificados (saida tipo "
+                "PAG em vez de DAG) -- Spirtes, Meek & Richardson, 1995 (FCI); Runge et al., "
+                "2020 (LPCMCI)."
             )
 
         requires_non_gaussian = any(
