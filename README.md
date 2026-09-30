@@ -277,6 +277,11 @@ uvicorn backend.app.main:create_app --factory --port 8000    # docs em /docs
 cd frontend; npm install; npm run dev                          # http://localhost:5173
 ```
 
+Com Docker (API + front em uma única imagem, dados persistidos no volume `causal-data`):
+`docker compose up --build` e abrir `http://localhost:8000`. Os tipos TypeScript do contrato são
+gerados do OpenAPI (`npm run generate:api` em `frontend/`); o CI falha se `frontend/openapi.json`
+divergir da API.
+
 Fluxo: escolher/enviar dataset → perfilar (estacionariedade, linearidade, não gaussianidade e
 métodos recomendados) → configurar execução (variáveis, métodos, lag, conhecimento
 especialista) → acompanhar o status → explorar grafo, arestas, ranking, consistência e

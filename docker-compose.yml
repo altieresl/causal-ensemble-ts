@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      CAUSAL_MAX_WORKERS: "1"
+    volumes:
+      - causal-data:/data   # uploads e execucoes sobrevivem a recriacao do container
+
+volumes:
+  causal-data:
