@@ -1,27 +1,20 @@
-// Espelha backend/app/api/schemas.py e o resultado de backend/app/services/pipeline.py.
+// Tipos do contrato HTTP derivados do OpenAPI (schema.d.ts, gerado por `npm run generate:api`).
+// O perfil e o resultado da execução são dicionários dinâmicos no backend; seus tipos abaixo
+// são mantidos à mão (ver backend/app/services/pipeline.py para o formato).
+import type { components } from "./schema";
 
-export type Origin = "builtin" | "upload";
-export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
-export type Relation = "strong" | "weak" | "inverse" | "none";
-export type Constraint = "soft" | "hard";
+type Schemas = components["schemas"];
 
-export interface DatasetSummary {
-  id: string;
-  name: string;
-  description: string;
-  origin: Origin;
-  default_max_lag: number;
-}
-
-export interface DatasetDetails {
-  entry: DatasetSummary;
-  available_columns: string[];
-  selected_columns: string[];
-  n_rows: number;
-  preview: Record<string, string | number | null>[];
-  has_ground_truth: boolean;
-  default_max_lag: number;
-}
+export type DatasetSummary = Schemas["DatasetSummary"];
+export type DatasetDetails = Schemas["DatasetDetails"];
+export type ExpertRule = Schemas["ExpertRule"];
+export type CreateRunRequest = Schemas["CreateRunRequest"];
+export type Run = Schemas["RunView"];
+export type Method = Schemas["MethodView"];
+export type Origin = DatasetSummary["origin"];
+export type RunStatus = Run["status"];
+export type Relation = ExpertRule["relation"];
+export type Constraint = ExpertRule["constraint"];
 
 export interface VariableProfile {
   name: string;
@@ -47,43 +40,6 @@ export interface DatasetProfile {
   non_gaussian_fraction: number;
   variables: VariableProfile[];
   recommendations: MethodRecommendation[];
-}
-
-export interface ExpertRule {
-  source: string;
-  target: string;
-  lag?: number | null;
-  relation: Relation;
-  confidence: number;
-  constraint: Constraint;
-}
-
-export interface CreateRunRequest {
-  dataset_id: string;
-  columns?: string[] | null;
-  max_lag: number;
-  make_stationary: boolean;
-  normalize: boolean;
-  quick_mode: boolean;
-  n_bootstrap?: number | null;
-  methods?: string[] | null;
-  expert_knowledge: ExpertRule[];
-  ensemble_threshold: number;
-}
-
-export interface Run {
-  id: string;
-  status: RunStatus;
-  params: Record<string, unknown>;
-  created_at: string;
-  started_at: string | null;
-  finished_at: string | null;
-  error: string | null;
-}
-
-export interface Method {
-  name: string;
-  default_weight: number;
 }
 
 export interface Edge {
