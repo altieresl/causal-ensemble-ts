@@ -283,11 +283,14 @@ gerados do OpenAPI (`npm run generate:api` em `frontend/`); o CI falha se `front
 divergir da API.
 
 Fluxo: escolher/enviar dataset → perfilar (estacionariedade, linearidade, não gaussianidade e
-métodos recomendados) → configurar execução (variáveis, métodos, lag, conhecimento
-especialista) → acompanhar o status → explorar grafo, arestas, ranking, consistência e
-validação estrutural. A validação contra o grafo verdadeiro é calculada apenas após a
-seleção dos métodos. Detalhes em `backend/README.md` e `frontend/README.md`; a execução do
-ensemble completo continua custosa (minutos), por isso é assíncrona.
+métodos recomendados) → configurar (variáveis, objetivo/relações, métodos, lag, trajetória,
+período sazonal, conhecimento especialista) → acompanhar → explorar grafo, arestas, ranking,
+consistência, validação estrutural e comparação com os algoritmos avulsos. Também estão na web:
+benchmark sintético com mudança no regime de ruído, validação estatística com réplicas
+(Wilcoxon + Holm + IC + taxa de vitórias), experimento do atlas, seleção de métodos via chat
+local (Ollama) e consulta RAG às fichas dos algoritmos. A validação contra o grafo verdadeiro e a
+comparação são calculadas apenas após a seleção dos métodos. Detalhes em `backend/README.md` e
+`frontend/README.md`; as análises longas (minutos) são assíncronas, com progresso e cancelamento.
 
 ## Conhecimento especialista
 

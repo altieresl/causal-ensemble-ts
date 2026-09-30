@@ -26,6 +26,15 @@ from .services.runs import KindSpec, RunService
 API_PREFIX = "/api/v1"
 
 
+def _make_streams_unicode_safe() -> None:
+    """O nucleo imprime avisos com simbolos Unicode (ex.: aviso de premissas); em consoles
+    cp1252 (Windows) isso levantaria UnicodeEncodeError dentro da execucao."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(errors="replace")
+
+
 def _core_method_weights() -> dict[str, float]:
     from causal_discovery import get_registered_method_weights
 
@@ -41,6 +50,7 @@ def create_app(
     method_weights: dict[str, float] | None = None,
 ) -> FastAPI:
     """Dependencias injetaveis (``pipeline``, ``jobs``) permitem testar sem o nucleo pesado."""
+    _make_streams_unicode_safe()
     settings = settings or Settings.from_env()
     # O nucleo vive na raiz do repositorio; garante o import quando executado de outro cwd.
     if str(settings.repo_root) not in sys.path:
