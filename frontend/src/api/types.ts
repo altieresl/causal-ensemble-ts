@@ -80,14 +80,165 @@ export interface Validation {
   false_negative_pairs: string[][];
 }
 
+export interface ComparisonRow {
+  strategy: string;
+  returned_edges: number;
+  detected_pairs: number;
+  // presentes só quando o dataset tem grafo verdadeiro
+  precision?: number;
+  recall?: number;
+  f1_score?: number;
+  f1_minus_baseline?: number;
+  structural_hamming_distance?: number;
+  true_positives?: number;
+  false_positives?: number;
+  false_negatives?: number;
+  average_precision?: number | null;
+  roc_auc?: number | null;
+  false_positive_pairs?: string[][];
+  false_negative_pairs?: string[][];
+}
+
+export interface Comparison {
+  rows: ComparisonRow[];
+  overlap: { strategy: string; shared_pairs: number; only_method: number; only_ensemble: number; jaccard: number | null }[];
+  evaluated_pairs: number;
+  reference: { ground_truth_pairs: number; ground_truth_prevalence: number; all_pairs_baseline_f1: number } | null;
+}
+
+export interface PanelEvidence {
+  trajectory_count: number;
+  max_lag: number;
+  context_nodes: number;
+  ranking_metrics: { roc_auc: number; average_precision: number; random_average_precision: number } | null;
+  error: string | null;
+  top_pairs: { source: string; target: string; score: number }[];
+}
+
 export interface RunResult {
   columns: string[];
+  objective: { type: string; primary_variable: string | null; secondary_variable: string | null } | null;
   best_combination: string[];
   edges: Edge[];
   ranking: RankingRow[];
   method_weights: Record<string, number>;
   consistency: { labels: string[]; matrix: (number | null)[][] };
   validation: Validation | null;
+  comparison: Comparison;
+  panel_evidence: PanelEvidence | null;
+}
+
+export interface StructuralMetrics {
+  precision: number;
+  recall: number;
+  f1_score: number;
+  structural_hamming_distance: number;
+  true_positives: number;
+  false_positives: number;
+  false_negatives: number;
+}
+
+export interface BenchmarkOutcome {
+  metrics: StructuralMetrics;
+  edges: { source: string; target: string; lag: number; edge_probability: number | null }[];
+  true_positives: (string | number)[][];
+  false_positives: (string | number)[][];
+  false_negatives: (string | number)[][];
+  best_combination: string | string[];
+}
+
+export interface BenchmarkResult {
+  params: Record<string, unknown>;
+  ground_truth: { source: string; target: string; lag: number }[];
+  clean: BenchmarkOutcome;
+  noisy: BenchmarkOutcome;
+  delta: Record<string, number>;
+}
+
+export interface ReplicatedResult {
+  params: Record<string, unknown>;
+  columns: string[];
+  replicate_ids: number[];
+  completed_replicates: number;
+  metrics: ({ replicate_id: number; strategy: string } & Record<string, number | string | null>)[];
+  selections: { replicate_id: number; auto_combination: string; combinations_evaluated: number }[];
+  selection_counts: Record<string, number>;
+  failures: { replicate_id: number; error_type: string; error: string }[];
+  descriptive: ({ strategy: string } & Record<string, number | string | null>)[];
+  comparison: {
+    baseline: string;
+    paired_trajectories?: number;
+    mean_improvement?: number;
+    confidence_interval_low?: number;
+    confidence_interval_high?: number;
+    win_rate?: number;
+    wilcoxon_p_value?: number | null;
+    holm_p_value?: number | null;
+    confirmatory_sample_available?: boolean;
+    superiority_criterion_met?: boolean;
+    error?: string;
+  }[];
+}
+
+export interface AtlasExperimentResult {
+  outcome: "completed" | "insufficient_candidates";
+  message?: string;
+  dataset_name?: string;
+  n_variables?: number;
+  n_timepoints?: number;
+  candidate_methods?: string[];
+  assumption_flags?: Record<string, string[]>;
+  recommendations?: { framework_method_name: string; included: boolean; reasons: string[] }[];
+  best_combination_methods?: string[];
+  best_combination_performance_score?: number;
+  best_single_method?: string;
+  best_single_performance_score?: number;
+  best_combination_metrics_post_hoc?: Record<string, number> | null;
+  best_single_metrics_post_hoc?: Record<string, number> | null;
+  all_single_methods_metrics_post_hoc?: Record<string, Record<string, number> | null>;
+  single_method_performance_scores?: Record<string, number>;
+  ensemble_beats_best_single_f1?: boolean | null;
+  flagged_methods_in_best_combination?: string[];
+}
+
+export interface ChatResult {
+  profile_text: string;
+  statistical: {
+    included: string[];
+    recommendations: { method: string; included: boolean; reasons: string[] }[];
+  };
+  chat: {
+    included: string[];
+    excluded: string[];
+    justification: string;
+    decisions: { name: string; include: boolean; reason: string; retried: boolean; synthesis_corrected: boolean }[];
+  };
+  agreement: { only_statistical: string[]; only_chat: string[]; shared: string[] };
+}
+
+export interface Algorithm {
+  id: string;
+  name: string;
+  aliases: string[];
+  family: string;
+  temporal_handling: string;
+  output_type: string;
+  handles_latent_confounders: boolean;
+  handles_nonlinearity: boolean;
+  handles_contemporaneous_effects: boolean;
+  implemented_in_framework: boolean;
+  framework_method_name: string | null;
+  verification: string;
+  assumptions: { id: string; required: boolean; statement: string }[];
+  references: string[];
+  sections?: Record<string, string>;
+}
+
+export interface AskResponse {
+  query: string;
+  retrieved: { algorithm_id: string; section: string; text: string; score: number }[];
+  answer: string | null;
+  error: string | null;
 }
 
 export interface ProblemDetails {

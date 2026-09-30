@@ -35,7 +35,12 @@ export const useProfile = () =>
       api.profileDataset(id, body),
   });
 
-export const useRuns = () => useQuery({ queryKey: ["runs"], queryFn: api.listRuns });
+export const useRuns = () =>
+  useQuery({
+    queryKey: ["runs"],
+    queryFn: api.listRuns,
+    refetchInterval: (query) => (query.state.data?.some((run) => !isTerminal(run.status)) ? 3000 : false),
+  });
 
 /** Async Request-Reply: consulta o status até um estado terminal. */
 export const useRun = (id: string) =>
@@ -45,16 +50,20 @@ export const useRun = (id: string) =>
     refetchInterval: (query) => (query.state.data && isTerminal(query.state.data.status) ? false : 2000),
   });
 
-export const useRunResult = (id: string, enabled: boolean) =>
-  useQuery({ queryKey: ["runs", id, "result"], queryFn: () => api.getRunResult(id), enabled });
+export const useRunResult = <T>(id: string, enabled: boolean) =>
+  useQuery({ queryKey: ["runs", id, "result"], queryFn: () => api.getRunResult<T>(id), enabled });
 
-export function useCreateRun() {
+/** Toda criação de execução (qualquer tipo) invalida a lista de execuções. */
+function useCreate<TBody>(create: (body: TBody) => Promise<Run>) {
   const client = useQueryClient();
-  return useMutation({
-    mutationFn: api.createRun,
-    onSuccess: () => client.invalidateQueries({ queryKey: ["runs"] }),
-  });
+  return useMutation({ mutationFn: create, onSuccess: () => client.invalidateQueries({ queryKey: ["runs"] }) });
 }
+
+export const useCreateRun = () => useCreate(api.createRun);
+export const useCreateBenchmark = () => useCreate(api.createBenchmark);
+export const useCreateReplicatedValidation = () => useCreate(api.createReplicatedValidation);
+export const useCreateAtlasExperiment = () => useCreate(api.createAtlasExperiment);
+export const useCreateAtlasChat = () => useCreate(api.createAtlasChat);
 
 export function useDeleteRun() {
   const client = useQueryClient();
@@ -63,3 +72,7 @@ export function useDeleteRun() {
     onSuccess: () => client.invalidateQueries({ queryKey: ["runs"] }),
   });
 }
+
+export const useAlgorithms = () => useQuery({ queryKey: ["atlas", "algorithms"], queryFn: api.listAlgorithms, staleTime: Infinity });
+
+export const useAsk = () => useMutation({ mutationFn: api.ask });

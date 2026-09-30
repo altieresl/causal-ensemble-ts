@@ -3,9 +3,10 @@ import { useMemo, useState } from "react";
 import type { Edge, RunResult } from "../../api/types";
 import { Card, TableWrap } from "../../components/ui";
 import { formatNumber, formatPercent, heatColor } from "../../lib/format";
+import { ComparisonTab } from "./ComparisonTab";
 import { EdgeGraph } from "./EdgeGraph";
 
-const TABS = ["Grafo", "Arestas", "Ranking", "Consistência", "Validação"] as const;
+const TABS = ["Grafo", "Arestas", "Ranking", "Consistência", "Validação", "Comparação"] as const;
 type Tab = (typeof TABS)[number];
 
 export function ResultView({ result }: { result: RunResult }) {
@@ -39,6 +40,14 @@ export function ResultView({ result }: { result: RunResult }) {
       {tab === "Ranking" && <RankingTab result={result} />}
       {tab === "Consistência" && <ConsistencyTab result={result} />}
       {tab === "Validação" && <ValidationTab result={result} />}
+      {tab === "Comparação" &&
+        (result.comparison ? (
+          <ComparisonTab comparison={result.comparison} panel={result.panel_evidence ?? null} />
+        ) : (
+          <Card title="Comparação">
+            <p className="muted">Esta execução é anterior à comparação; rode novamente para gerá-la.</p>
+          </Card>
+        ))}
     </div>
   );
 }

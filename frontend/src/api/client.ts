@@ -1,4 +1,6 @@
 import type {
+  Algorithm,
+  AskResponse,
   CreateRunRequest,
   DatasetDetails,
   DatasetProfile,
@@ -6,10 +8,17 @@ import type {
   Method,
   ProblemDetails,
   Run,
-  RunResult,
 } from "./types";
+import type { components } from "./schema";
 
 const BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
+
+type Schemas = components["schemas"];
+export type BenchmarkRequest = Schemas["BenchmarkRequest"];
+export type ReplicatedValidationRequest = Schemas["ReplicatedValidationRequest"];
+export type AtlasExperimentRequest = Schemas["AtlasExperimentRequest"];
+export type AtlasChatRequest = Schemas["AtlasChatRequest"];
+export type AskRequest = Schemas["AskRequest"];
 
 export class ApiError extends Error {
   constructor(
@@ -47,22 +56,34 @@ const json = (method: string, body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
+const id = encodeURIComponent;
+
 export const api = {
   listMethods: () => request<Method[]>("/methods"),
   listDatasets: () => request<DatasetSummary[]>("/datasets"),
-  getDataset: (id: string) => request<DatasetDetails>(`/datasets/${encodeURIComponent(id)}`),
+  getDataset: (datasetId: string) => request<DatasetDetails>(`/datasets/${id(datasetId)}`),
   uploadDataset: (file: File, dateColumn?: string) => {
     const form = new FormData();
     form.append("file", file);
     if (dateColumn) form.append("date_column", dateColumn);
     return request<DatasetSummary>("/datasets", { method: "POST", body: form });
   },
-  deleteDataset: (id: string) => request<void>(`/datasets/${encodeURIComponent(id)}`, { method: "DELETE" }),
-  profileDataset: (id: string, body: { columns?: string[]; declared_causal_sufficiency?: boolean | null }) =>
-    request<DatasetProfile>(`/datasets/${encodeURIComponent(id)}/profile`, json("POST", body)),
+  deleteDataset: (datasetId: string) => request<void>(`/datasets/${id(datasetId)}`, { method: "DELETE" }),
+  profileDataset: (datasetId: string, body: { columns?: string[]; declared_causal_sufficiency?: boolean | null }) =>
+    request<DatasetProfile>(`/datasets/${id(datasetId)}/profile`, json("POST", body)),
+
   listRuns: () => request<Run[]>("/runs"),
-  getRun: (id: string) => request<Run>(`/runs/${encodeURIComponent(id)}`),
-  getRunResult: (id: string) => request<RunResult>(`/runs/${encodeURIComponent(id)}/result`),
+  getRun: (runId: string) => request<Run>(`/runs/${id(runId)}`),
+  getRunResult: <T>(runId: string) => request<T>(`/runs/${id(runId)}/result`),
+  deleteRun: (runId: string) => request<void>(`/runs/${id(runId)}`, { method: "DELETE" }),
   createRun: (body: CreateRunRequest) => request<Run>("/runs", json("POST", body)),
-  deleteRun: (id: string) => request<void>(`/runs/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  createBenchmark: (body: BenchmarkRequest) => request<Run>("/runs/benchmark", json("POST", body)),
+  createReplicatedValidation: (body: ReplicatedValidationRequest) =>
+    request<Run>("/runs/replicated-validation", json("POST", body)),
+  createAtlasExperiment: (body: AtlasExperimentRequest) => request<Run>("/runs/atlas-experiment", json("POST", body)),
+  createAtlasChat: (body: AtlasChatRequest) => request<Run>("/runs/atlas-chat", json("POST", body)),
+
+  listAlgorithms: () => request<Algorithm[]>("/atlas/algorithms"),
+  getAlgorithm: (algorithmId: string) => request<Algorithm>(`/atlas/algorithms/${id(algorithmId)}`),
+  ask: (body: AskRequest) => request<AskResponse>("/atlas/ask", json("POST", body)),
 };

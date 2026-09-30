@@ -101,9 +101,27 @@ export function DatasetPage() {
         )}
       </Card>
 
-      <Link to={`/datasets/${id}/new-run`} className="button primary">
-        Configurar execução →
-      </Link>
+      <Card title="Análises">
+        <div className="row">
+          <Link to={`/datasets/${id}/new-run`} className="button primary">
+            Pipeline robusto →
+          </Link>
+          <Link to={`/datasets/${id}/atlas-experiment`} className="button">
+            Experimento do atlas
+          </Link>
+          <Link to={`/datasets/${id}/atlas-chat`} className="button">
+            Seleção via chat (Ollama)
+          </Link>
+          {details.supports_replicates && details.has_ground_truth && (
+            <Link to={`/datasets/${id}/validation`} className="button">
+              Validação com réplicas
+            </Link>
+          )}
+        </div>
+        {details.trajectory_count > 1 && (
+          <p className="muted">{details.trajectory_count} trajetórias independentes disponíveis neste dataset.</p>
+        )}
+      </Card>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useRuns } from "../../api/hooks";
 import { Card, ErrorBox, Spinner, StatusBadge, TableWrap } from "../../components/ui";
 import { formatDateTime, formatDuration } from "../../lib/format";
+import { KIND_LABELS } from "./kinds";
 
 export function RunsPage() {
   const runs = useRuns();
@@ -18,6 +19,7 @@ export function RunsPage() {
               <thead>
                 <tr>
                   <th>ID</th>
+                  <th>Tipo</th>
                   <th>Dataset</th>
                   <th>Status</th>
                   <th>Criada</th>
@@ -27,7 +29,7 @@ export function RunsPage() {
               <tbody>
                 {runs.data.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="muted">
+                    <td colSpan={6} className="muted">
                       Nenhuma execução ainda. Escolha um <Link to="/">dataset</Link>.
                     </td>
                   </tr>
@@ -37,7 +39,8 @@ export function RunsPage() {
                     <td>
                       <Link to={`/runs/${run.id}`}>{run.id}</Link>
                     </td>
-                    <td>{String(run.params.dataset_id)}</td>
+                    <td>{KIND_LABELS[run.kind]}</td>
+                    <td>{typeof run.params.dataset_id === "string" ? run.params.dataset_id : "—"}</td>
                     <td>
                       <StatusBadge status={run.status} />
                     </td>

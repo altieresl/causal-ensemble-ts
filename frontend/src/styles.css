@@ -84,3 +84,22 @@ td:last-child { white-space: normal; }
 .spinner { display: inline-block; width: .9em; height: .9em; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+.bar-0 { fill: var(--accent); background: var(--accent); }
+.bar-1 { fill: var(--ok); background: var(--ok); }
+.bar-2 { fill: var(--warn); background: var(--warn); }
+.chart { margin: 0; }
+.chart figcaption { font-weight: 600; margin-bottom: .25rem; }
+.chart svg { width: 100%; height: auto; }
+.chart-grid { stroke: var(--border); stroke-width: 1; }
+.chart-tick { fill: var(--muted); font-size: 11px; }
+.dot { fill: var(--accent); }
+.mean-mark { stroke: var(--text); stroke-width: 2; }
+.legend { display: flex; gap: 1rem; list-style: none; padding: 0; margin: .25rem 0 0; }
+.swatch { display: inline-block; width: .8rem; height: .8rem; border-radius: 2px; vertical-align: -1px; }
+tr.highlight td { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); font-weight: 600; }
+.grow { flex: 1 1 260px; }
+.plain { list-style: none; padding: 0; margin: 0; }
+button.link { border: none; background: none; padding: 0; color: var(--accent); text-decoration: underline; }
+blockquote { margin: 0; padding: .5rem .75rem; border-left: 3px solid var(--accent); background: var(--bg); }
+progress { width: 240px; vertical-align: middle; accent-color: var(--accent); }
