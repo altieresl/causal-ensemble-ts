@@ -1,0 +1,5 @@
+# Dependencias da API web. O nucleo cientifico usa o requirements.txt da raiz.
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+httpx>=0.27  # TestClient nos testes
