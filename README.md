@@ -265,6 +265,25 @@ aciona automaticamente uma execução padrão com:
 Isso evita que regras apenas preenchidas na interface afetem uma execução que não foi
 explicitamente iniciada pelo usuário.
 
+## Interface web (React + FastAPI)
+
+Além do notebook, o fluxo interativo está disponível como aplicação web com back e front
+separados. O núcleo (`causal_discovery/`, `causal_algorithms_atlas/`) não muda: a API
+(`backend/`) o orquestra e o front (`frontend/`) consome a API HTTP.
+
+```powershell
+pip install -r backend/requirements.txt
+uvicorn backend.app.main:create_app --factory --port 8000    # docs em /docs
+cd frontend; npm install; npm run dev                          # http://localhost:5173
+```
+
+Fluxo: escolher/enviar dataset → perfilar (estacionariedade, linearidade, não gaussianidade e
+métodos recomendados) → configurar execução (variáveis, métodos, lag, conhecimento
+especialista) → acompanhar o status → explorar grafo, arestas, ranking, consistência e
+validação estrutural. A validação contra o grafo verdadeiro é calculada apenas após a
+seleção dos métodos. Detalhes em `backend/README.md` e `frontend/README.md`; a execução do
+ensemble completo continua custosa (minutos), por isso é assíncrona.
+
 ## Conhecimento especialista
 
 ```python
