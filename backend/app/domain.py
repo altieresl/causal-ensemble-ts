@@ -26,6 +26,23 @@ class ConflictError(DomainError):
     title = "Conflito de estado"
 
 
+class ServiceUnavailableError(DomainError):
+    status = 503
+    title = "Servico indisponivel"
+
+
+class RunCancelledError(Exception):
+    """Levantada por ``ProgressReporter`` quando a execucao foi cancelada (cancelamento cooperativo)."""
+
+
+class RunKind(str, Enum):
+    PIPELINE = "pipeline"
+    BENCHMARK = "benchmark"
+    REPLICATED_VALIDATION = "replicated_validation"
+    ATLAS_EXPERIMENT = "atlas_experiment"
+    ATLAS_CHAT = "atlas_chat"
+
+
 class RunStatus(str, Enum):
     QUEUED = "queued"
     RUNNING = "running"
@@ -65,6 +82,11 @@ class RunParams:
     selected_relations: list[tuple[str, str]] | None = None
     ensemble_threshold: float = 0.5
     random_state: int = 42
+    trajectory_index: int | None = None
+    decomposition_period: int | None = None
+    panel_evidence: bool = True
+    panel_max_lag: int = 1
+    objective: dict[str, Any] | None = None  # so registro: o efeito esta em selected_relations
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -80,35 +102,22 @@ class RunParams:
 @dataclass
 class Run:
     id: str
-    params: RunParams
+    params: dict[str, Any]
+    kind: str = RunKind.PIPELINE.value
     status: RunStatus = RunStatus.QUEUED
     created_at: str = field(default_factory=utc_now)
     started_at: str | None = None
     finished_at: str | None = None
     error: str | None = None
     result: dict[str, Any] | None = None
+    progress: dict[str, Any] | None = None  # {"done": int, "total": int, "message": str}
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "id": self.id,
-            "params": self.params.to_dict(),
-            "status": self.status.value,
-            "created_at": self.created_at,
-            "started_at": self.started_at,
-            "finished_at": self.finished_at,
-            "error": self.error,
-            "result": self.result,
-        }
+        return {**asdict(self), "status": self.status.value}
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "Run":
-        return cls(
-            id=payload["id"],
-            params=RunParams.from_dict(payload["params"]),
-            status=RunStatus(payload["status"]),
-            created_at=payload["created_at"],
-            started_at=payload.get("started_at"),
-            finished_at=payload.get("finished_at"),
-            error=payload.get("error"),
-            result=payload.get("result"),
-        )
+        data = dict(payload)
+        data["status"] = RunStatus(data["status"])
+        data.setdefault("kind", RunKind.PIPELINE.value)
+        return cls(**data)

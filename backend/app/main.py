@@ -14,12 +14,14 @@ from .adapters.catalog import DatasetCatalog
 from .adapters.run_store import FileRunRepository
 from .api.deps import Container
 from .api.errors import install_error_handlers
-from .api.routers import datasets, health, methods, runs
+from .api.routers import atlas, datasets, health, methods, runs
 from .config import Settings
+from .services.atlas import AtlasService
 from .services.datasets import DatasetService
 from .services.jobs import JobRunner, ThreadPoolJobRunner
 from .services.pipeline import PipelineFn, run_pipeline
-from .services.runs import RunService
+from .services.kinds import build_kinds
+from .services.runs import KindSpec, RunService
 
 API_PREFIX = "/api/v1"
 
@@ -34,6 +36,7 @@ def create_app(
     settings: Settings | None = None,
     *,
     pipeline: PipelineFn = run_pipeline,
+    kind_overrides: dict[str, KindSpec] | None = None,
     jobs: JobRunner | None = None,
     method_weights: dict[str, float] | None = None,
 ) -> FastAPI:
@@ -47,13 +50,10 @@ def create_app(
     job_runner = jobs or ThreadPoolJobRunner(settings.max_workers)
     catalog = DatasetCatalog(settings.repo_root, settings.uploads_dir)
     dataset_service = DatasetService(catalog, settings.max_upload_bytes)
-    run_service = RunService(
-        FileRunRepository(settings.runs_dir),
-        dataset_service,
-        job_runner,
-        pipeline,
-        available_methods=list(weights),
-    )
+    atlas_service = AtlasService(settings.repo_root, settings.data_dir / "atlas_history.jsonl")
+    kinds = build_kinds(dataset_service, atlas_service, pipeline, available_methods=list(weights))
+    kinds.update(kind_overrides or {})  # testes substituem so os tipos pesados
+    run_service = RunService(FileRunRepository(settings.runs_dir), job_runner, kinds)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -61,7 +61,7 @@ def create_app(
         job_runner.shutdown()
 
     app = FastAPI(title="Causal Discovery TS API", version="1.0.0", lifespan=lifespan)
-    app.state.container = Container(datasets=dataset_service, runs=run_service, method_weights=weights)
+    app.state.container = Container(datasets=dataset_service, runs=run_service, atlas=atlas_service, method_weights=weights)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
@@ -72,7 +72,7 @@ def create_app(
     install_error_handlers(app)
 
     api = APIRouter(prefix=API_PREFIX)
-    for module in (health, methods, datasets, runs):
+    for module in (health, methods, datasets, atlas, runs):
         api.include_router(module.router)
     app.include_router(api)
 

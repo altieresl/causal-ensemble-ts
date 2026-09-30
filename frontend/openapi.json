@@ -1,6 +1,250 @@
 {
   "components": {
     "schemas": {
+      "AskRequest": {
+        "properties": {
+          "generate": {
+            "default": false,
+            "title": "Generate",
+            "type": "boolean"
+          },
+          "k": {
+            "default": 4,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "K",
+            "type": "integer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "query": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "AskRequest",
+        "type": "object"
+      },
+      "AtlasChatRequest": {
+        "properties": {
+          "columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Columns"
+          },
+          "dataset_id": {
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "declared_causal_sufficiency": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Causal Sufficiency"
+          },
+          "max_retries": {
+            "default": 1,
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Max Retries",
+            "type": "integer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "required": [
+          "dataset_id"
+        ],
+        "title": "AtlasChatRequest",
+        "type": "object"
+      },
+      "AtlasExperimentRequest": {
+        "properties": {
+          "columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Columns"
+          },
+          "dataset_id": {
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "declared_causal_sufficiency": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Causal Sufficiency"
+          },
+          "max_lag": {
+            "default": 1,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Max Lag",
+            "type": "integer"
+          },
+          "max_methods": {
+            "anyOf": [
+              {
+                "maximum": 20.0,
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 3,
+            "title": "Max Methods"
+          },
+          "max_rows": {
+            "anyOf": [
+              {
+                "minimum": 50.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Rows"
+          },
+          "methods": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Methods"
+          },
+          "n_bootstrap": {
+            "default": 3,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "N Bootstrap",
+            "type": "integer"
+          },
+          "use_assumption_soft_filter": {
+            "default": true,
+            "title": "Use Assumption Soft Filter",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "dataset_id"
+        ],
+        "title": "AtlasExperimentRequest",
+        "type": "object"
+      },
+      "BenchmarkRequest": {
+        "properties": {
+          "index_change": {
+            "default": 250,
+            "minimum": 0.0,
+            "title": "Index Change",
+            "type": "integer"
+          },
+          "max_lag": {
+            "default": 2,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Max Lag",
+            "type": "integer"
+          },
+          "methods": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Methods"
+          },
+          "n_bootstrap": {
+            "default": 20,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "N Bootstrap",
+            "type": "integer"
+          },
+          "n_samples": {
+            "default": 500,
+            "maximum": 5000.0,
+            "minimum": 100.0,
+            "title": "N Samples",
+            "type": "integer"
+          },
+          "noise_multiplier": {
+            "default": 3.0,
+            "minimum": 0.0,
+            "title": "Noise Multiplier",
+            "type": "number"
+          }
+        },
+        "title": "BenchmarkRequest",
+        "type": "object"
+      },
       "Body_upload_dataset_api_v1_datasets_post": {
         "properties": {
           "date_column": {
@@ -45,6 +289,18 @@
           "dataset_id": {
             "title": "Dataset Id",
             "type": "string"
+          },
+          "decomposition_period": {
+            "anyOf": [
+              {
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decomposition Period"
           },
           "ensemble_threshold": {
             "default": 0.5,
@@ -104,6 +360,23 @@
             "title": "Normalize",
             "type": "boolean"
           },
+          "objective": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective"
+          },
+          "panel_evidence": {
+            "default": true,
+            "title": "Panel Evidence",
+            "type": "boolean"
+          },
           "parallel_jobs": {
             "anyOf": [
               {
@@ -145,6 +418,18 @@
               }
             ],
             "title": "Selected Relations"
+          },
+          "trajectory_index": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trajectory Index"
           }
         },
         "required": [
@@ -161,6 +446,17 @@
             },
             "title": "Available Columns",
             "type": "array"
+          },
+          "decomposition_period": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decomposition Period"
           },
           "default_max_lag": {
             "title": "Default Max Lag",
@@ -191,6 +487,14 @@
             },
             "title": "Selected Columns",
             "type": "array"
+          },
+          "supports_replicates": {
+            "title": "Supports Replicates",
+            "type": "boolean"
+          },
+          "trajectory_count": {
+            "title": "Trajectory Count",
+            "type": "integer"
           }
         },
         "required": [
@@ -200,7 +504,10 @@
           "n_rows",
           "preview",
           "has_ground_truth",
-          "default_max_lag"
+          "default_max_lag",
+          "decomposition_period",
+          "trajectory_count",
+          "supports_replicates"
         ],
         "title": "DatasetDetails",
         "type": "object"
@@ -374,6 +681,137 @@
         "title": "ProfileRequest",
         "type": "object"
       },
+      "ReplicatedValidationRequest": {
+        "properties": {
+          "columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Columns"
+          },
+          "dataset_id": {
+            "title": "Dataset Id",
+            "type": "string"
+          },
+          "decomposition_period": {
+            "anyOf": [
+              {
+                "minimum": 2.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decomposition Period"
+          },
+          "ensemble_threshold": {
+            "default": 0.5,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Ensemble Threshold",
+            "type": "number"
+          },
+          "max_lag": {
+            "default": 2,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Max Lag",
+            "type": "integer"
+          },
+          "methods": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Methods"
+          },
+          "min_confirmatory_replicates": {
+            "default": 10,
+            "minimum": 2.0,
+            "title": "Min Confirmatory Replicates",
+            "type": "integer"
+          },
+          "minimum_precision_gain": {
+            "default": 0.05,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Minimum Precision Gain",
+            "type": "number"
+          },
+          "minimum_win_rate": {
+            "default": 0.7,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Minimum Win Rate",
+            "type": "number"
+          },
+          "n_bootstrap": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Bootstrap"
+          },
+          "n_replicates": {
+            "default": 10,
+            "maximum": 100.0,
+            "minimum": 2.0,
+            "title": "N Replicates",
+            "type": "integer"
+          },
+          "quick_mode": {
+            "default": false,
+            "title": "Quick Mode",
+            "type": "boolean"
+          },
+          "replicate_seed": {
+            "default": 2029,
+            "title": "Replicate Seed",
+            "type": "integer"
+          },
+          "significance_level": {
+            "default": 0.05,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Significance Level",
+            "type": "number"
+          },
+          "statistical_bootstraps": {
+            "default": 10000,
+            "maximum": 100000.0,
+            "minimum": 100.0,
+            "title": "Statistical Bootstraps",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dataset_id"
+        ],
+        "title": "ReplicatedValidationRequest",
+        "type": "object"
+      },
       "RunView": {
         "properties": {
           "created_at": {
@@ -406,10 +844,33 @@
             "title": "Id",
             "type": "string"
           },
+          "kind": {
+            "enum": [
+              "pipeline",
+              "benchmark",
+              "replicated_validation",
+              "atlas_experiment",
+              "atlas_chat"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "params": {
             "additionalProperties": true,
             "title": "Params",
             "type": "object"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress"
           },
           "started_at": {
             "anyOf": [
@@ -436,12 +897,14 @@
         },
         "required": [
           "id",
+          "kind",
           "status",
           "params",
           "created_at",
           "started_at",
           "finished_at",
-          "error"
+          "error",
+          "progress"
         ],
         "title": "RunView",
         "type": "object"
@@ -494,6 +957,121 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/atlas/algorithms": {
+      "get": {
+        "description": "Fichas verificadas do atlas de algoritmos (premissas, familia, referencias).",
+        "operationId": "list_algorithms_api_v1_atlas_algorithms_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response List Algorithms Api V1 Atlas Algorithms Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Algorithms",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/algorithms/{algorithm_id}": {
+      "get": {
+        "operationId": "get_algorithm_api_v1_atlas_algorithms__algorithm_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "algorithm_id",
+            "required": true,
+            "schema": {
+              "title": "Algorithm Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Algorithm Api V1 Atlas Algorithms  Algorithm Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Algorithm",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
+    "/api/v1/atlas/ask": {
+      "post": {
+        "description": "RAG local: trechos recuperados por TF-IDF; resposta do Ollama apenas com generate=true.",
+        "operationId": "ask_api_v1_atlas_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Ask Api V1 Atlas Ask Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ask",
+        "tags": [
+          "atlas"
+        ]
+      }
+    },
     "/api/v1/datasets": {
       "get": {
         "operationId": "list_datasets_api_v1_datasets_get",
@@ -762,6 +1340,7 @@
         ]
       },
       "post": {
+        "description": "Pipeline robusto (ENSEMBLE_AUTO) sobre um dataset.",
         "operationId": "create_run_api_v1_runs_post",
         "requestBody": {
           "content": {
@@ -796,6 +1375,174 @@
           }
         },
         "summary": "Create Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/atlas-chat": {
+      "post": {
+        "description": "Selecao de metodos via chat local (Ollama), comparada ao filtro estatistico.",
+        "operationId": "create_atlas_chat_api_v1_runs_atlas_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AtlasChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Atlas Chat",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/atlas-experiment": {
+      "post": {
+        "description": "Perfil -> metodos compativeis -> selecao cega -> avaliacao pos-hoc.",
+        "operationId": "create_atlas_experiment_api_v1_runs_atlas_experiment_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AtlasExperimentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Atlas Experiment",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/benchmark": {
+      "post": {
+        "description": "Benchmark sintetico com ground truth conhecido + robustez a mudanca no regime de ruido.",
+        "operationId": "create_benchmark_api_v1_runs_benchmark_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BenchmarkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Benchmark",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/replicated-validation": {
+      "post": {
+        "description": "Validacao estatistica pareada em replicas independentes (~5 min por replica).",
+        "operationId": "create_replicated_validation_api_v1_runs_replicated_validation_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplicatedValidationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Replicated Validation",
         "tags": [
           "runs"
         ]

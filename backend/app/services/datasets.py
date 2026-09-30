@@ -21,16 +21,31 @@ class DatasetService:
     def get(self, dataset_id: str) -> DatasetEntry:
         return self._catalog.get(dataset_id)
 
-    def load(self, dataset_id: str) -> Any:
-        """Carrega via nucleo (``load_time_series_dataset``)."""
+    def load(
+        self,
+        dataset_id: str,
+        columns: list[str] | None = None,
+        trajectory_index: int | None = None,
+    ) -> Any:
+        """Carrega via nucleo (``load_time_series_dataset``).
+
+        ``columns`` substitui a selecao padrao do catalogo e ``trajectory_index`` escolhe a
+        trajetoria de datasets CausalTime; ambos sao validados pelo proprio carregador.
+        """
         from causal_discovery import load_time_series_dataset
 
         entry = self._catalog.get(dataset_id)
         kwargs = self._catalog.resolve_kwargs(entry)
+        if columns:
+            kwargs["selected_columns"] = list(columns)
+        if trajectory_index is not None:
+            if "trajectory_index" not in kwargs:
+                raise DomainError("Este dataset nao possui multiplas trajetorias.")
+            kwargs["trajectory_index"] = int(trajectory_index)
         data_path = kwargs.pop("data_path")
         try:
             return load_time_series_dataset(data_path, **kwargs)
-        except (ValueError, FileNotFoundError) as error:
+        except (ValueError, IndexError, KeyError, FileNotFoundError) as error:
             raise DomainError(f"Falha ao carregar o dataset: {error}") from error
 
     def upload(self, name: str, content: bytes, date_column: str | None) -> DatasetEntry:
@@ -58,6 +73,9 @@ class DatasetService:
                 "preview": head,
                 "has_ground_truth": not bundle.ground_truth.empty,
                 "default_max_lag": entry.default_max_lag,
+                "decomposition_period": entry.decomposition_period,
+                "trajectory_count": bundle.trajectory_count,
+                "supports_replicates": entry.replicate_excluded_trajectories is not None,
             }
         )
 
@@ -71,9 +89,8 @@ class DatasetService:
         from causal_algorithms_atlas.dataset_profile import profile_dataset
         from causal_algorithms_atlas.ensemble_advisor import recommend_framework_methods
 
-        bundle = self.load(dataset_id)
-        data = bundle.data if not columns else bundle.data.loc[:, columns]
-        profile = profile_dataset(data)
+        bundle = self.load(dataset_id, columns)
+        profile = profile_dataset(bundle.data)
         recommendations = recommend_framework_methods(
             profile, declared_causal_sufficiency=declared_causal_sufficiency
         )

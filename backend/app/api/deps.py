@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from fastapi import Request
 
+from ..services.atlas import AtlasService
 from ..services.datasets import DatasetService
 from ..services.runs import RunService
 
@@ -14,6 +15,7 @@ from ..services.runs import RunService
 class Container:
     datasets: DatasetService
     runs: RunService
+    atlas: AtlasService
     method_weights: dict[str, float]
 
 

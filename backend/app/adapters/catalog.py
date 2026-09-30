@@ -23,11 +23,21 @@ class DatasetEntry:
     loader_kwargs: dict[str, Any] = field(default_factory=dict)  # load_time_series_dataset
     default_max_lag: int = 2
     decomposition_period: int | None = None
+    panel_max_lag: int = 1
+    # Trajetorias ja usadas como desenvolvimento/holdout (ou na execucao unica): fora da
+    # amostra de replicas. ``None`` = o dataset nao tem replicas independentes.
+    replicate_excluded_trajectories: tuple[int, ...] | None = None
 
 
 _TOY_DIR = "datasets/synthetic_causal"
 _TRAFFIC_COLUMNS = [f"traffic_{n:02d}" for n in (2, 4, 6, 8, 13, 19)]
 _TOY_DESCRIPTION = "Dataset sintetico com grafo causal conhecido (usado so na validacao pos-hoc)."
+
+_TRAFFIC_EXCLUDED_TRAJECTORIES = (
+    0,
+    12, 37, 42, 84, 169, 172, 176, 207, 210, 223, 303, 307, 312, 369, 401,
+    3, 40, 71, 113, 135, 170, 184, 186, 217, 230, 240, 273, 287, 298, 441,
+)
 
 _TOYS = [
     ("toy_a", "toy_a_linear", "Sintetico A - linear"),
@@ -69,6 +79,8 @@ def builtin_entries() -> list[DatasetEntry]:
                 "selected_columns": _TRAFFIC_COLUMNS,
             },
             default_max_lag=2,
+            panel_max_lag=1,
+            replicate_excluded_trajectories=_TRAFFIC_EXCLUDED_TRAJECTORIES,
         ),
     ]
     for dataset_id, stem, title in _TOYS:

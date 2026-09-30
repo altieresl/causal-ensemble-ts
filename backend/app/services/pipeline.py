@@ -1,20 +1,21 @@
 """Pipeline robusto (ENSEMBLE_AUTO): port do ``pipeline_runner`` de Series_Temporais.ipynb.
 
-Unico modulo do backend que conhece o nucleo cientifico para executar a analise.
-A selecao de metodos/combinacao e cega ao ground truth; a validacao estrutural roda
-somente depois, em ``validation`` (mesma disciplina do notebook).
+Modulo do backend que conhece o nucleo cientifico para executar a analise principal. A selecao
+de metodos/combinacao e cega ao ground truth; a validacao estrutural e a comparacao contra
+algoritmos avulsos rodam somente depois (campos ``validation`` e ``comparison``).
 """
 
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import pandas as pd
 
 from ..adapters.serialization import frame_records, to_jsonable
 from ..domain import RunParams
+from . import analysis
 
 PipelineFn = Callable[[Any, RunParams], dict[str, Any]]
 
@@ -32,13 +33,21 @@ RANKING_COLUMNS = [
 ]
 
 
-def build_selection_args(params: RunParams, n_rows: int) -> dict[str, Any]:
+def build_selection_args(
+    *,
+    quick_mode: bool,
+    n_bootstrap: int | None,
+    parallel_jobs: int | None,
+    max_lag: int,
+    random_state: int,
+    n_rows: int,
+) -> dict[str, Any]:
     """Hiperparametros do notebook (celula 6); ``quick_mode`` limita a busca a 3 metodos."""
     default_jobs = max(1, min(4, (os.cpu_count() or 2) - 1))
     return {
         "min_methods": 2,
         "min_votes": 1,
-        "n_bootstrap": int(params.n_bootstrap or (4 if params.quick_mode else 8)),
+        "n_bootstrap": int(n_bootstrap or (4 if quick_mode else 8)),
         "block_size": max(2, n_rows // 12),
         "stability_threshold": 0.6,
         "selection_probability_threshold": 0.55,
@@ -48,7 +57,7 @@ def build_selection_args(params: RunParams, n_rows: int) -> dict[str, Any]:
         "stability_weight": 0.65,
         "local_expert_weight": 0.60,
         "predictive_validation_weight": 0.75,
-        "predictive_validation_max_lag": params.max_lag,
+        "predictive_validation_max_lag": max_lag,
         "predictive_validation_splits": 3,
         "predictive_validation_ridge_alpha": 1.0,
         "method_redundancy_penalty": 0.20,
@@ -57,14 +66,14 @@ def build_selection_args(params: RunParams, n_rows: int) -> dict[str, Any]:
         "method_density_penalty": 0.5,
         "minimum_method_weight": 0.05,
         "confidence_level": 0.95,
-        "random_state": params.random_state,
+        "random_state": random_state,
         "precompute_runs": True,
-        "parallel_jobs": int(params.parallel_jobs or default_jobs),
-        "max_bootstrap_seconds": 240 if params.quick_mode else 900,
+        "parallel_jobs": int(parallel_jobs or default_jobs),
+        "max_bootstrap_seconds": 240 if quick_mode else 900,
     }
 
 
-def _restrict_relations(method: Callable, allowed: set[tuple[str, str]]) -> Callable:
+def restrict_relations(method: Callable, allowed: set[tuple[str, str]]) -> Callable:
     """Mantem so as arestas das relacoes pedidas, sem alterar os dados de entrada."""
 
     def run_restricted(data: pd.DataFrame, **kwargs: Any) -> pd.DataFrame:
@@ -77,85 +86,138 @@ def _restrict_relations(method: Callable, allowed: set[tuple[str, str]]) -> Call
     return run_restricted
 
 
-def run_pipeline(dataset: Any, params: RunParams) -> dict[str, Any]:
-    """Executa pre-processamento + selecao robusta e devolve um resultado JSON-ready."""
-    # Imports tardios: carregar o nucleo (torch, tigramite) e caro e opcional nos testes de API.
+def preprocess(
+    raw: pd.DataFrame,
+    *,
+    make_stationary: bool = True,
+    normalize: bool = True,
+    decomposition_period: int | None = None,
+):
+    from causal_discovery import CausalPreprocessor
+
+    preprocessor = CausalPreprocessor(raw, significance_level=0.05, decomposition_period=decomposition_period)
+    processed = preprocessor.fit_transform(
+        make_stationary=make_stationary, normalize=normalize, remove_trend=False, max_diffs=2
+    )
+    return processed, preprocessor
+
+
+def run_robust_selection(
+    processed: pd.DataFrame,
+    method_names: Sequence[str] | None,
+    *,
+    quick_mode: bool,
+    n_bootstrap: int | None,
+    parallel_jobs: int | None,
+    max_lag: int,
+    random_state: int,
+    expert_knowledge: list[dict[str, Any]],
+    relations: Sequence[tuple[str, str]] | None,
+) -> tuple[dict[str, Any], dict[str, Any], list[str], list[tuple[str, str]]]:
+    """Selecao robusta de combinacoes. Devolve (selecao, args usados, metodos, relacoes)."""
     from causal_discovery import (
-        CausalPreprocessor,
-        add_precision_consensus_selection,
-        compute_undirected_skeleton_metrics,
         get_registered_method_kwargs,
         get_registered_method_weights,
         get_registered_methods,
     )
     from causal_discovery.ensemble_selection import select_robust_ensemble_combination
 
-    columns = list(params.columns or dataset.selected_columns)
-    raw = dataset.data.loc[:, columns].copy()
-    preprocessor = CausalPreprocessor(raw, significance_level=0.05, decomposition_period=None)
-    processed = preprocessor.fit_transform(
-        make_stationary=params.make_stationary,
-        normalize=params.normalize,
-        remove_trend=False,
-        max_diffs=2,
-    )
-
     registered = get_registered_methods()
-    names = list(params.methods or registered)
-    kwargs_all = get_registered_method_kwargs(params.max_lag)
+    names = list(method_names or registered)
+    kwargs_all = get_registered_method_kwargs(max_lag)
     weights_all = get_registered_method_weights()
 
     all_pairs = [(s, t) for s in processed.columns for t in processed.columns if s != t]
-    relations = [tuple(r) for r in (params.selected_relations or all_pairs)]
-    relation_set = set(relations)
-    restrict = relation_set != set(all_pairs)
+    chosen = [tuple(r) for r in (relations or all_pairs)]
+    restrict = set(chosen) != set(all_pairs)
     methods = {
-        name: _restrict_relations(registered[name], relation_set) if restrict else registered[name]
+        name: restrict_relations(registered[name], set(chosen)) if restrict else registered[name]
         for name in names
     }
 
-    selection_args = build_selection_args(params, len(processed))
-    selection_args["max_methods"] = min(3, len(names)) if params.quick_mode else len(names)
+    selection_args = build_selection_args(
+        quick_mode=quick_mode, n_bootstrap=n_bootstrap, parallel_jobs=parallel_jobs,
+        max_lag=max_lag, random_state=random_state, n_rows=len(processed),
+    )
+    selection_args["max_methods"] = min(3, len(names)) if quick_mode else len(names)
     selection = select_robust_ensemble_combination(
         processed,
         methods,
         method_kwargs={name: kwargs_all[name] for name in names},
         method_weights={name: weights_all[name] for name in names},
-        expert_knowledge=list(params.expert_knowledge),
+        expert_knowledge=list(expert_knowledge),
         **selection_args,
     )
-    best = selection["best_evaluation"]
+    return selection, selection_args, names, chosen
 
-    summary = best["probabilistic_summary"].copy()
-    summary["ensemble_score"] = summary["pre_validation_ensemble_score"]
-    summary = add_precision_consensus_selection(
-        summary,
-        score_threshold=params.ensemble_threshold,
-        method_support_threshold=SOFT_VOTING_SUPPORT_THRESHOLD,
+
+def soft_voting(summary: pd.DataFrame, threshold: float) -> pd.DataFrame:
+    """Consenso de precisao em segundo estagio (soft voting), como nos benchmarks do ensemble."""
+    from causal_discovery import add_precision_consensus_selection
+
+    frame = summary.copy()
+    frame["ensemble_score"] = frame["pre_validation_ensemble_score"]
+    return add_precision_consensus_selection(
+        frame, score_threshold=threshold, method_support_threshold=SOFT_VOTING_SUPPORT_THRESHOLD
     )
+
+
+def run_pipeline(dataset: Any, params: RunParams) -> dict[str, Any]:
+    """Executa pre-processamento + selecao robusta e devolve um resultado JSON-ready."""
+    from causal_discovery import compute_undirected_skeleton_metrics
+
+    columns = list(params.columns or dataset.selected_columns)
+    raw = dataset.data.loc[:, columns].copy()
+    processed, preprocessor = preprocess(
+        raw,
+        make_stationary=params.make_stationary,
+        normalize=params.normalize,
+        decomposition_period=params.decomposition_period,
+    )
+
+    selection, selection_args, _names, relations = run_robust_selection(
+        processed,
+        params.methods,
+        quick_mode=params.quick_mode,
+        n_bootstrap=params.n_bootstrap,
+        parallel_jobs=params.parallel_jobs,
+        max_lag=params.max_lag,
+        random_state=params.random_state,
+        expert_knowledge=params.expert_knowledge,
+        relations=params.selected_relations,
+    )
+    best = selection["best_evaluation"]
+    summary = soft_voting(best["probabilistic_summary"], params.ensemble_threshold)
 
     stability = best["stability"]
     stable = stability.loc[stability["stability_selected"]] if "stability_selected" in stability else stability.iloc[0:0]
     consistency = best["consistency"]
 
-    validation = None
-    if not dataset.ground_truth.empty:
-        selected_frame = summary
-        if "ensemble_selected" in summary.columns:
-            selected_frame = summary.loc[summary["ensemble_selected"].fillna(False).astype(bool)]
+    validation = comparison = panel = None
+    ground_truth = dataset.ground_truth
+    comparison = analysis.compare_strategies(
+        selection, summary, ground_truth=ground_truth, nodes=columns,
+        relations=relations, threshold=params.ensemble_threshold,
+    )
+    if not ground_truth.empty:
         validation = compute_undirected_skeleton_metrics(
-            selected_frame,
-            dataset.ground_truth,
+            analysis.selected_frame(summary, params.ensemble_threshold),
+            ground_truth,
             prob_threshold=0.0,
             nodes=columns,
             evaluated_relations=relations,
         )
+        if params.panel_evidence:
+            panel = analysis.panel_evidence(
+                dataset, relations=relations, max_lag=params.panel_max_lag, ground_truth=ground_truth
+            )
 
+    combination = selection["best_combination"]
     return to_jsonable(
         {
             "columns": columns,
-            "best_combination": list(selection["best_combination"]) if not isinstance(selection["best_combination"], str)
-            else selection["best_combination"].split(" + "),
+            "objective": params.objective,
+            "best_combination": combination.split(" + ") if isinstance(combination, str) else list(combination),
             "edges": frame_records(summary, EDGE_COLUMNS),
             "ranking": frame_records(selection["ranking"].head(20), RANKING_COLUMNS),
             "method_weights": best["effective_method_weights"],
@@ -166,5 +228,7 @@ def run_pipeline(dataset: Any, params: RunParams) -> dict[str, Any]:
             "preprocessing": preprocessor.summary(),
             "selection_args": selection_args,
             "validation": validation,
+            "comparison": comparison,
+            "panel_evidence": panel,
         }
     )
