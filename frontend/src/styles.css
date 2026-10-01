@@ -239,3 +239,14 @@ blockquote { margin: 0; padding: .6rem .8rem; border-left: 3px solid var(--accen
 .fraction { height: .45rem; background: var(--border); border-radius: 999px; overflow: hidden; margin-top: .3rem; }
 .fraction > span { display: block; height: 100%; background: var(--accent); }
 .fraction-row { display: grid; gap: .15rem; }
+
+/* ---------- Perfil de experiência ---------- */
+.topbar-end { margin-left: auto; }
+.segmented.small button { padding: .25rem .65rem; font-size: .85rem; }
+.hint { background: var(--accent-soft); border-radius: var(--radius-sm); padding: .55rem .75rem; font-size: .9rem; }
+.hint::before { content: "💡 "; }
+.welcome { border-color: var(--accent); }
+.choice { flex-direction: column; align-items: flex-start; text-align: left; gap: .35rem; padding: 1rem; height: 100%; }
+.choice strong { font-size: 1.05rem; }
+.choice span { color: var(--muted); }
+.choice:hover:not(:disabled) { background: var(--accent-soft); }

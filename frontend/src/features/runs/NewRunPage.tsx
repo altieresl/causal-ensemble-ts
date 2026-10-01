@@ -5,6 +5,7 @@ import { useCreateRun, useDataset, useMethods } from "../../api/hooks";
 import type { ExpertRule } from "../../api/types";
 import { useToast } from "../../components/toast";
 import { Card, ErrorBox, Field, PageHeader, PageSkeleton } from "../../components/ui";
+import { AdvancedOnly, BeginnerHint, useExperience } from "../../lib/experience";
 import { allRelations, relationsFor, type Objective, type Relation } from "../../lib/objective";
 import { ExpertRulesEditor } from "./ExpertRulesEditor";
 import { estimateMinutes } from "./kinds";
@@ -45,6 +46,7 @@ export function NewRunPage() {
   const dataset = useDataset(id);
   const methods = useMethods();
   const createRun = useCreateRun();
+  const { isBeginner } = useExperience();
 
   const [columns, setColumns] = useState<string[]>([]);
   const [selectedMethods, setSelectedMethods] = useState<string[]>([]);
@@ -149,7 +151,11 @@ export function NewRunPage() {
           { label: details.entry.name, to: `/datasets/${id}` },
           { label: "Pipeline robusto" },
         ]}
-        lead="Configure o pipeline em quatro passos. Os valores iniciais reproduzem o padrão do notebook."
+        lead={
+          isBeginner
+            ? "Escolha as variáveis, o que quer investigar e quanto tempo pode esperar. O resto usa valores padrão já testados."
+            : "Configure o pipeline em quatro passos. Os valores iniciais reproduzem o padrão do notebook."
+        }
       />
 
       <Step n={1} title="Variáveis" hint="Escolha as séries que entram na análise.">
@@ -178,6 +184,10 @@ export function NewRunPage() {
       </Step>
 
       <Step n={2} title="Objetivo da análise" hint="Define quais relações origem → destino serão avaliadas.">
+        <BeginnerHint>
+          “Explorar estrutura geral” testa todas as relações. Se você quer saber o que influencia uma variável específica,
+          escolha “Investigar causas de uma variável” — fica mais rápido e focado.
+        </BeginnerHint>
         <RelationSelector
           nodes={columns}
           objective={objective}
@@ -188,7 +198,15 @@ export function NewRunPage() {
         />
       </Step>
 
-      <Step n={3} title="Métodos e esforço" hint="Mais métodos e bootstraps dão resultados mais estáveis, porém mais lentos.">
+      <Step
+        n={3}
+        title={isBeginner ? "Esforço" : "Métodos e esforço"}
+        hint="Mais métodos e bootstraps dão resultados mais estáveis, porém mais lentos."
+      >
+        <BeginnerHint>
+          “Rápido” serve para explorar em poucos minutos; “Equilibrado” é o padrão usado na pesquisa; “Completo” repete
+          mais vezes para medir a estabilidade com mais precisão.
+        </BeginnerHint>
         <div className="row">
           <span className="field-label">Esforço</span>
           <div className="segmented" role="group" aria-label="Predefinições de esforço">
@@ -200,6 +218,7 @@ export function NewRunPage() {
           </div>
           <span className="muted small">{preset === "custom" ? "personalizado" : PRESETS[preset].hint}</span>
         </div>
+        <AdvancedOnly>
         <div className="row">
           <button type="button" onClick={() => setSelectedMethods(allMethodNames)}>
             Todos os métodos
@@ -232,6 +251,13 @@ export function NewRunPage() {
             )}
           </Field>
         </div>
+        </AdvancedOnly>
+        {isBeginner && (
+          <p className="muted small">
+            Todos os {allMethodNames.length} métodos entram como candidatos; lag máximo {maxLag} e limiar {threshold.toFixed(2)} (padrões).
+          </p>
+        )}
+        <AdvancedOnly>
         <details className="advanced">
           <summary>Opções avançadas</summary>
           <div className="stack">
@@ -303,8 +329,10 @@ export function NewRunPage() {
             </div>
           </div>
         </details>
+        </AdvancedOnly>
       </Step>
 
+      <AdvancedOnly>
       <Step
         n={4}
         title="Conhecimento especialista (opcional)"
@@ -312,6 +340,7 @@ export function NewRunPage() {
       >
         <ExpertRulesEditor columns={columns} rules={rules} onChange={setRules} />
       </Step>
+      </AdvancedOnly>
 
       {createRun.isError && <ErrorBox error={createRun.error} />}
       <div className="action-bar">

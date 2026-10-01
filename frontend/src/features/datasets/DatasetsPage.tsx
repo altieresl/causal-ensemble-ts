@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 import { useDatasets, useDeleteDataset, useUploadDataset } from "../../api/hooks";
 import { useToast } from "../../components/toast";
 import { Badge, Card, ConfirmButton, EmptyState, ErrorBox, PageHeader, PageSkeleton } from "../../components/ui";
+import { WelcomeProfile } from "../../components/WelcomeProfile";
+import { BeginnerHint } from "../../lib/experience";
 
 export function DatasetsPage() {
   const datasets = useDatasets();
@@ -53,6 +55,11 @@ export function DatasetsPage() {
         title="Datasets"
         lead="Escolha uma série temporal para perfilar e analisar, ou envie o seu CSV. O perfil indica quais algoritmos de descoberta causal são compatíveis com os dados."
       />
+      <WelcomeProfile />
+      <BeginnerHint>
+        Comece por um dataset sintético (por exemplo “Sintético A - linear”): ele tem um grafo causal conhecido, então
+        você consegue conferir se a análise acertou. Abra o dataset, veja o perfil e clique em “Pipeline robusto”.
+      </BeginnerHint>
 
       <Card title="Enviar CSV">
         <form

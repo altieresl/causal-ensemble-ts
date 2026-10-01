@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useCreateBenchmark } from "../../api/hooks";
 import { Card, ErrorBox, PageHeader } from "../../components/ui";
+import { AdvancedOnly, BeginnerHint } from "../../lib/experience";
 import { MethodChecklist } from "../runs/MethodChecklist";
 
 /** Benchmark sintético (gerador com estrutura conhecida) + robustez a mudança no regime de ruído. */
@@ -63,7 +64,12 @@ export function BenchmarkPage() {
         </div>
         {invalidChange && <p className="error">O índice deve estar dentro da série (0 a {nSamples - 1}).</p>}
       </Card>
+      <BeginnerHint>
+        Este teste responde: “se o gerador dos dados é conhecido, a análise recupera as relações certas? E continua
+        acertando quando os dados ficam muito mais ruidosos?”. Os valores padrão já servem.
+      </BeginnerHint>
       <Card title="Seleção robusta">
+        <AdvancedOnly>
         <div className="form-grid">
           <label>
             Bootstraps
@@ -74,6 +80,7 @@ export function BenchmarkPage() {
             <input type="number" min={1} max={10} value={maxLag} onChange={(e) => setMaxLag(Number(e.target.value))} />
           </label>
         </div>
+        </AdvancedOnly>
         <MethodChecklist value={methods} onChange={setMethods} />
         <p className="muted">Com todos os métodos o custo é alto (56 combinações de 3 métodos, duas séries).</p>
       </Card>

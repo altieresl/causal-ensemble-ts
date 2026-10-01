@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { useCreateReplicatedValidation, useDataset } from "../../api/hooks";
 import { Card, ErrorBox, PageHeader, PageSkeleton } from "../../components/ui";
+import { AdvancedOnly, BeginnerHint } from "../../lib/experience";
 import { MethodChecklist } from "../runs/MethodChecklist";
 
 /** Validação estatística pareada (Wilcoxon + Holm + IC + taxa de vitórias) sobre réplicas independentes. */
@@ -75,12 +76,17 @@ export function ReplicatedValidationPage() {
           </>
         }
       />
+      <BeginnerHint>
+        Uma execução única pode acertar por sorte. Aqui a mesma análise é repetida em várias séries independentes e um
+        teste estatístico diz se o ensemble é melhor de forma consistente. Comece com poucas réplicas no modo rápido.
+      </BeginnerHint>
       <Card title="Réplicas e estatística">
         <div className="form-grid">
           <label>
             Réplicas
             <input type="number" min={2} max={100} value={replicates} onChange={(e) => setReplicates(Number(e.target.value))} />
           </label>
+          <AdvancedOnly>
           <label>
             Bootstraps do IC
             <input type="number" min={100} max={100000} step={100} value={bootstraps} onChange={(e) => setBootstraps(Number(e.target.value))} />
@@ -110,6 +116,7 @@ export function ReplicatedValidationPage() {
             <input type="number" min={1} max={8} value={parallelReplicas} onChange={(e) => setParallelReplicas(e.target.value)} />
             <span className="muted small">O orçamento de CPU é dividido entre elas; os resultados são idênticos aos da execução sequencial.</span>
           </label>
+          </AdvancedOnly>
         </div>
         <label className="check">
           <input type="checkbox" checked={quickMode} onChange={(e) => setQuickMode(e.target.checked)} />

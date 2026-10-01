@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { useCreateAtlasChat, useCreateAtlasExperiment, useDataset } from "../../api/hooks";
 import { Card, ErrorBox, PageHeader, PageSkeleton } from "../../components/ui";
+import { AdvancedOnly, BeginnerHint } from "../../lib/experience";
 
 type Sufficiency = "unknown" | "yes" | "no";
 const SUFFICIENCY: Record<Sufficiency, boolean | null> = { unknown: null, yes: true, no: false };
@@ -31,6 +32,7 @@ export function AtlasExperimentPage() {
   const [maxLag, setMaxLag] = useState(1);
   const [maxRows, setMaxRows] = useState("");
   const [softFilter, setSoftFilter] = useState(true);
+  const [compareFilters, setCompareFilters] = useState(true);
   const [sufficiency, setSufficiency] = useState<Sufficiency>("unknown");
 
   if (dataset.isPending) return <PageSkeleton />;
@@ -46,6 +48,7 @@ export function AtlasExperimentPage() {
         max_lag: maxLag,
         max_rows: maxRows ? Number(maxRows) : null,
         use_assumption_soft_filter: softFilter,
+        compare_filters: compareFilters,
         declared_causal_sufficiency: SUFFICIENCY[sufficiency],
       },
       { onSuccess: (run) => navigate(`/runs/${run.id}`) },
@@ -64,8 +67,13 @@ export function AtlasExperimentPage() {
           </>
         }
       />
+      <BeginnerHint>
+        O experimento verifica se combinar algoritmos (ensemble) é melhor do que usar só o melhor algoritmo sozinho. A
+        opção de comparar filtros mostra quanto tempo se economiza descartando de antemão os algoritmos incompatíveis.
+      </BeginnerHint>
       <Card title="Parâmetros">
         <div className="form-grid">
+          <AdvancedOnly>
           <label>
             Bootstraps
             <input type="number" min={1} max={100} value={nBootstrap} onChange={(e) => setNBootstrap(Number(e.target.value))} />
@@ -82,12 +90,18 @@ export function AtlasExperimentPage() {
             Limitar linhas (vazio = todas)
             <input type="number" min={50} value={maxRows} onChange={(e) => setMaxRows(e.target.value)} />
           </label>
+          </AdvancedOnly>
           <SufficiencySelect value={sufficiency} onChange={setSufficiency} />
         </div>
         <label className="check">
           <input type="checkbox" checked={softFilter} onChange={(e) => setSoftFilter(e.target.checked)} />
           Filtro suave: manter métodos que violam uma premissa (a estabilidade sob bootstrap decide)
         </label>
+        <label className="check">
+          <input type="checkbox" checked={compareFilters} onChange={(e) => setCompareFilters(e.target.checked)} />
+          Comparar com o outro filtro (suave × rígido): roda as duas variantes em sequência e compara tempo e resultado
+        </label>
+        {compareFilters && <p className="muted small">Leva aproximadamente o dobro do tempo de uma variante só.</p>}
       </Card>
       {create.isError && <ErrorBox error={create.error} />}
       <div>
@@ -139,8 +153,13 @@ export function AtlasChatPage() {
           </>
         }
       />
+      <BeginnerHint>
+        Um modelo de linguagem local decide, algoritmo por algoritmo, se ele combina com o perfil dos dados — e explica o
+        porquê. O resultado é comparado com a regra determinística do sistema, que pode discordar do modelo.
+      </BeginnerHint>
       <Card title="Parâmetros">
         <div className="form-grid">
+          <AdvancedOnly>
           <label>
             Modelo (vazio = padrão do servidor)
             <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="qwen2.5:7b" />
@@ -150,6 +169,7 @@ export function AtlasChatPage() {
             <input type="range" min={1} max={8} value={parallelCalls} onChange={(e) => setParallelCalls(Number(e.target.value))} />
             <span className="muted small">Cada algoritmo é uma chamada independente; o ganho depende de OLLAMA_NUM_PARALLEL.</span>
           </label>
+          </AdvancedOnly>
           <SufficiencySelect value={sufficiency} onChange={setSufficiency} />
         </div>
       </Card>

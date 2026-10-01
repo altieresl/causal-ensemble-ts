@@ -5,6 +5,7 @@ import { Tabs } from "../../components/Tabs";
 import { useToast } from "../../components/toast";
 import { Card, EmptyState, Stat, TableWrap, ValueBar } from "../../components/ui";
 import { downloadText, toCsv } from "../../lib/export";
+import { BeginnerHint, useExperience } from "../../lib/experience";
 import { formatNumber, formatPercent, heatColor } from "../../lib/format";
 import { collapseEdges } from "../../lib/graph";
 import { OBJECTIVE_LABELS, type ObjectiveType } from "../../lib/objective";
@@ -13,10 +14,30 @@ import { EdgeGraph } from "./EdgeGraph";
 
 const TABS = ["Grafo", "Arestas", "Ranking", "Consistência", "Validação", "Comparação"] as const;
 type Tab = (typeof TABS)[number];
+// Iniciante: só o que responde "quais relações foram encontradas e se elas estão certas".
+const BEGINNER_TABS = ["Grafo", "Arestas", "Validação"] as const satisfies readonly Tab[];
+
+function HowToRead({ result, selected }: { result: RunResult; selected: number }) {
+  const v = result.validation;
+  return (
+    <BeginnerHint>
+      A análise encontrou <strong>{selected}</strong> relação(ões) causal(is) prováveis entre {result.columns.length} variáveis,
+      combinando {result.best_combination.length} algoritmos. No grafo, cada seta vai da possível causa para o efeito; setas mais
+      grossas têm probabilidade maior.{" "}
+      {v
+        ? `Como este dataset tem o grafo verdadeiro, dá para conferir: o F1 foi ${formatNumber(v.f1_score, 2)} (1,00 = acerto total), contra ${formatNumber(v.all_pairs_baseline_f1, 2)} de um “chute” que liga todos os pares.`
+        : "Este dataset não tem grafo verdadeiro, então as relações são hipóteses a avaliar com conhecimento do domínio."}{" "}
+      Lembre: dados observacionais sugerem, mas não provam, causalidade.
+    </BeginnerHint>
+  );
+}
 
 export function ResultView({ result, runId }: { result: RunResult; runId: string }) {
   const [tab, setTab] = useState<Tab>("Grafo");
   const { notify } = useToast();
+  const { isBeginner } = useExperience();
+  const tabs: readonly Tab[] = isBeginner ? BEGINNER_TABS : TABS;
+  const activeTab = tabs.includes(tab) ? tab : "Grafo";
   const selected = useMemo(() => collapseEdges(result.edges, { selectedOnly: true, minProbability: 0 }), [result.edges]);
   const objective = result.objective?.type as ObjectiveType | undefined;
 
@@ -31,6 +52,7 @@ export function ResultView({ result, runId }: { result: RunResult; runId: string
 
   return (
     <div className="stack">
+      <HowToRead result={result} selected={selected.length} />
       <div className="stats">
         <Stat label="Arestas selecionadas" value={selected.length} hint={`${result.edges.length} candidatas no total`} />
         <Stat label="Variáveis" value={result.columns.length} hint={objective ? OBJECTIVE_LABELS[objective] : undefined} />
@@ -62,13 +84,13 @@ export function ResultView({ result, runId }: { result: RunResult; runId: string
         </p>
       </Card>
 
-      <Tabs tabs={TABS} value={tab} onChange={setTab} label="Resultados da execução">
-        {tab === "Grafo" && <GraphTab result={result} />}
-        {tab === "Arestas" && <EdgesTab edges={result.edges} />}
-        {tab === "Ranking" && <RankingTab result={result} />}
-        {tab === "Consistência" && <ConsistencyTab result={result} />}
-        {tab === "Validação" && <ValidationTab result={result} />}
-        {tab === "Comparação" &&
+      <Tabs tabs={tabs} value={activeTab} onChange={setTab} label="Resultados da execução">
+        {activeTab === "Grafo" && <GraphTab result={result} />}
+        {activeTab === "Arestas" && <EdgesTab edges={result.edges} />}
+        {activeTab === "Ranking" && <RankingTab result={result} />}
+        {activeTab === "Consistência" && <ConsistencyTab result={result} />}
+        {activeTab === "Validação" && <ValidationTab result={result} />}
+        {activeTab === "Comparação" &&
           (result.comparison ? (
             <ComparisonTab comparison={result.comparison} panel={result.panel_evidence ?? null} />
           ) : (

@@ -3,6 +3,7 @@ import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { isTerminal, useRuns } from "./api/hooks";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { EmptyState } from "./components/ui";
+import { ExperienceToggle } from "./lib/experience";
 import { AtlasChatPage, AtlasExperimentPage } from "./features/atlas/AtlasExperimentPage";
 import { AtlasPage } from "./features/atlas/AtlasPage";
 import { BenchmarkPage } from "./features/benchmark/BenchmarkPage";
@@ -67,6 +68,9 @@ export function App() {
           <NavLink to="/benchmark">Benchmark</NavLink>
           <NavLink to="/atlas">Atlas</NavLink>
         </nav>
+        <div className="topbar-end">
+          <ExperienceToggle />
+        </div>
       </header>
       <main id="conteudo">
         <ErrorBoundary resetKey={location.pathname}>

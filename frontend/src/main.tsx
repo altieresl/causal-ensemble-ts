@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./App";
 import { ToastProvider } from "./components/toast";
+import { ExperienceProvider } from "./lib/experience";
 import "./styles.css";
 
 const queryClient = new QueryClient({
@@ -14,11 +15,13 @@ const queryClient = new QueryClient({
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </ToastProvider>
+      <ExperienceProvider>
+        <ToastProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </ToastProvider>
+      </ExperienceProvider>
     </QueryClientProvider>
   </React.StrictMode>,
 );

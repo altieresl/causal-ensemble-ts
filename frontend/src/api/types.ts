@@ -180,8 +180,32 @@ export interface ReplicatedResult {
   }[];
 }
 
+export interface FilterVariantSummary {
+  filter: "suave" | "rigido";
+  outcome: "completed" | "insufficient_candidates";
+  message: string | null;
+  elapsed_seconds: number;
+  candidate_methods: string[];
+  combinations_evaluated: number;
+  best_combination: string[] | null;
+  best_combination_performance_score: number | null;
+  best_single_method: string | null;
+  f1_combination_post_hoc: number | null;
+  f1_best_single_post_hoc: number | null;
+}
+
+export interface FilterComparison {
+  soft: FilterVariantSummary;
+  rigid: FilterVariantSummary;
+  seconds_saved_by_rigid: number;
+  speedup_rigid: number | null;
+  excluded_by_rigid: string[];
+}
+
 export interface AtlasExperimentResult {
   outcome: "completed" | "insufficient_candidates";
+  elapsed_seconds?: number;
+  filter_comparison?: FilterComparison;
   message?: string;
   dataset_name?: string;
   n_variables?: number;

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { useDataset, useProfile } from "../../api/hooks";
 import { Badge, Card, ErrorBox, PageHeader, PageSkeleton, Skeleton, Stat, TableWrap } from "../../components/ui";
+import { AdvancedOnly, BeginnerHint } from "../../lib/experience";
 import { formatNumber, formatPercent } from "../../lib/format";
 
 type Sufficiency = "unknown" | "yes" | "no";
@@ -58,6 +59,11 @@ export function DatasetPage() {
         {details.trajectory_count > 1 && <Stat label="Trajetórias" value={details.trajectory_count} hint="independentes" />}
       </div>
 
+      <BeginnerHint>
+        O perfil abaixo mede três propriedades das séries. Cada algoritmo de descoberta causal assume algumas delas; os
+        que “violam premissas” tendem a errar neste dataset. Para começar, use o “Pipeline robusto”: ele combina vários
+        algoritmos e escolhe a melhor combinação sozinho.
+      </BeginnerHint>
       <Card title="Análises">
         <div className="grid">
           <Link to={`/datasets/${id}/new-run`} className="card flat interactive" style={{ textDecoration: "none", color: "inherit" }}>
@@ -138,6 +144,7 @@ export function DatasetPage() {
                 </tbody>
               </table>
             </TableWrap>
+            <AdvancedOnly>
             <details className="advanced">
               <summary>Perfil por variável</summary>
               <TableWrap>
@@ -165,6 +172,7 @@ export function DatasetPage() {
                 </table>
               </TableWrap>
             </details>
+            </AdvancedOnly>
           </>
         )}
       </Card>

@@ -1,7 +1,10 @@
 import type { AtlasExperimentResult, ChatDecision, ChatResult } from "../../api/types";
 import { Badge, Card, Stat, TableWrap } from "../../components/ui";
 import { explainDecision } from "../../lib/chatExplain";
+import { BeginnerHint } from "../../lib/experience";
 import { formatNumber, formatPercent } from "../../lib/format";
+import { formatElapsed } from "../../lib/useElapsed";
+import { FilterComparisonCard } from "./FilterComparisonCard";
 
 const metricLine = (metrics?: Record<string, number> | null) =>
   metrics
@@ -11,12 +14,15 @@ const metricLine = (metrics?: Record<string, number> | null) =>
 export function AtlasExperimentView({ result }: { result: AtlasExperimentResult }) {
   if (result.outcome === "insufficient_candidates") {
     return (
-      <Card title="Ensemble não formado">
-        <p>{result.message}</p>
-        <p className="muted">
-          Um ensemble precisa de ao menos 2 métodos compatíveis com o perfil. Tente outro dataset ou o filtro suave de premissas.
-        </p>
-      </Card>
+      <div className="stack">
+        <Card title="Ensemble não formado">
+          <p>{result.message}</p>
+          <p className="muted">
+            Um ensemble precisa de ao menos 2 métodos compatíveis com o perfil. Tente outro dataset ou o filtro suave de premissas.
+          </p>
+        </Card>
+        {result.filter_comparison && <FilterComparisonCard comparison={result.filter_comparison} />}
+      </div>
     );
   }
   const flagged = Object.entries(result.assumption_flags ?? {});
@@ -33,7 +39,11 @@ export function AtlasExperimentView({ result }: { result: AtlasExperimentResult 
             hint="avaliação pós-hoc"
           />
         )}
+        {result.elapsed_seconds != null && (
+          <Stat label="Tempo gasto" value={formatElapsed(Math.round(result.elapsed_seconds))} hint="filtro escolhido" />
+        )}
       </div>
+      {result.filter_comparison && <FilterComparisonCard comparison={result.filter_comparison} />}
       <Card title="Seleção cega ao gabarito">
         <p>
           Melhor combinação: <strong>{result.best_combination_methods?.join(" + ")}</strong> (performance{" "}
@@ -191,6 +201,10 @@ export function ChatResultView({ result }: { result: ChatResult }) {
   const decisions = [...chat.decisions].sort((a, b) => Number(a.agrees) - Number(b.agrees) || a.name.localeCompare(b.name));
   return (
     <div className="stack">
+      <BeginnerHint>
+        Cada cartão abaixo mostra um voto do modelo: o que ele leu dos dados, quais exigências o algoritmo tem e se isso
+        bate com a regra do sistema. Os marcados com “diverge do filtro” são onde vale olhar com mais atenção.
+      </BeginnerHint>
       <div className="stats">
         <Stat label="Incluídos pelo chat" value={chat.included.length} hint={`de ${chat.decisions.length} algoritmos`} />
         <Stat label="Incluídos pelo filtro" value={result.statistical.included.length} hint="premissas das fichas" />
