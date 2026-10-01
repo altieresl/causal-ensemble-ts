@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -399,6 +400,7 @@ def recommend_methods_via_chat(
     algorithms_dir: str | Path = _ALGORITHMS_DIR,
     model: str = "qwen2.5:7b",
     max_retries: int = 1,
+    max_workers: int = 1,
 ) -> ChatMethodSelection:
     """Pede ao chat local (Ollama) para decidir, um algoritmo por vez, quais
     entram no ensemble.
@@ -434,12 +436,18 @@ def recommend_methods_via_chat(
     (7/32) que a amostragem padrao do Ollama (2/32), porque travar na resposta
     "gulosa" do modelo tambem trava em erros deterministicos que a amostragem
     padrao as vezes evita por acaso. Mantido sem `options` (amostragem padrao).
+
+    ``max_workers`` (default 1, comportamento sequencial identico ao anterior): quantas
+    chamadas ao Ollama podem ocorrer em paralelo. Cada algoritmo e decidido numa chamada
+    independente (prompt proprio, sem estado compartilhado), entao paralelizar nao muda
+    as decisoes -- so o tempo total; a ordem do resultado segue a ordem dos algoritmos.
+    O ganho real depende de ``OLLAMA_NUM_PARALLEL`` no servidor do Ollama.
     """
     from causal_algorithms_atlas import rag_chat
 
     names = _known_methods(algorithms_dir)
-    decisions: list[MethodDecision] = []
-    for name in names:
+
+    def decide(name: str) -> MethodDecision:
         prompt = _build_method_prompt(profile, algorithms_dir, name)
         retried = False
         for attempt in range(max_retries + 1):
@@ -464,28 +472,32 @@ def recommend_methods_via_chat(
                     ),
                 }
 
-        decisions.append(
-            MethodDecision(
-                name=name,
-                stationary_fraction_pct=parsed["stationary_fraction_pct"],
-                dataset_is_majority_stationary=parsed["dataset_is_majority_stationary"],
-                linear_fraction_pct=parsed["linear_fraction_pct"],
-                dataset_is_majority_linear=parsed["dataset_is_majority_linear"],
-                non_gaussian_fraction_pct=parsed["non_gaussian_fraction_pct"],
-                dataset_is_majority_non_gaussian=parsed["dataset_is_majority_non_gaussian"],
-                algorithm_requires_stationarity=parsed["algorithm_requires_stationarity"],
-                algorithm_requires_linearity=parsed["algorithm_requires_linearity"],
-                algorithm_requires_non_gaussian_errors=parsed[
-                    "algorithm_requires_non_gaussian_errors"
-                ],
-                include=parsed["include"],
-                reason=parsed["reason"],
-                prompt=prompt,
-                raw_response=raw_response,
-                retried=retried,
-                synthesis_corrected=synthesis_corrected,
-            )
+        return MethodDecision(
+            name=name,
+            stationary_fraction_pct=parsed["stationary_fraction_pct"],
+            dataset_is_majority_stationary=parsed["dataset_is_majority_stationary"],
+            linear_fraction_pct=parsed["linear_fraction_pct"],
+            dataset_is_majority_linear=parsed["dataset_is_majority_linear"],
+            non_gaussian_fraction_pct=parsed["non_gaussian_fraction_pct"],
+            dataset_is_majority_non_gaussian=parsed["dataset_is_majority_non_gaussian"],
+            algorithm_requires_stationarity=parsed["algorithm_requires_stationarity"],
+            algorithm_requires_linearity=parsed["algorithm_requires_linearity"],
+            algorithm_requires_non_gaussian_errors=parsed[
+                "algorithm_requires_non_gaussian_errors"
+            ],
+            include=parsed["include"],
+            reason=parsed["reason"],
+            prompt=prompt,
+            raw_response=raw_response,
+            retried=retried,
+            synthesis_corrected=synthesis_corrected,
         )
+
+    if max_workers > 1 and len(names) > 1:
+        with ThreadPoolExecutor(max_workers=min(int(max_workers), len(names))) as executor:
+            decisions = list(executor.map(decide, names))  # map preserva a ordem de ``names``
+    else:
+        decisions = [decide(name) for name in names]
 
     included = tuple(d.name for d in decisions if d.include)
     excluded = tuple(d.name for d in decisions if not d.include)

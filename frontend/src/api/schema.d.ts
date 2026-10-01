@@ -320,6 +320,11 @@ export interface components {
             max_retries: number;
             /** Model */
             model?: string | null;
+            /**
+             * Parallel Calls
+             * @default 4
+             */
+            parallel_calls: number;
         };
         /** AtlasExperimentRequest */
         AtlasExperimentRequest: {
@@ -578,6 +583,8 @@ export interface components {
              * @default 10
              */
             n_replicates: number;
+            /** Parallel Replicas */
+            parallel_replicas?: number | null;
             /**
              * Quick Mode
              * @default false

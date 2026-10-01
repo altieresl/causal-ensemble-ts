@@ -36,6 +36,6 @@ class Settings:
             data_dir=Path(os.environ.get("CAUSAL_DATA_DIR", repo_root / "backend" / "var")).resolve(),
             cors_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
             max_upload_bytes=int(os.environ.get("CAUSAL_MAX_UPLOAD_MB", "20")) * 1024 * 1024,
-            max_workers=max(1, int(os.environ.get("CAUSAL_MAX_WORKERS", "1"))),
+            max_workers=max(1, int(os.environ.get("CAUSAL_MAX_WORKERS", "2"))),
             frontend_dist=dist if dist.is_dir() else None,
         )

@@ -7,6 +7,7 @@ limpa e sobre a mesma serie com ruido multiplicado a partir de ``index_change``.
 from __future__ import annotations
 
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import pandas as pd
@@ -98,15 +99,25 @@ def run_benchmark(raw_params: dict[str, Any], progress: ProgressFn) -> dict[str,
         summary = selection["best_evaluation"]["probabilistic_summary"]
         return summary.loc[summary["source"].ne(summary["target"])].reset_index(drop=True), selection["best_combination"]
 
-    progress(0, 2, "Serie limpa")
-    clean_summary, clean_combo = select(df)
-    progress(1, 2, "Serie com ruido severo")
     noisy = inject_noise_regime_change(
         df, index_change=params["index_change"], noise_multiplier=params["noise_multiplier"],
         random_state=params["random_state"],
     )
-    noisy_summary, noisy_combo = select(noisy)
-    progress(2, 2, "Concluido")
+    # As duas selecoes sao independentes (series diferentes, sem estado compartilhado): em paralelo.
+    done = {"count": 0}
+
+    def run_one(frame: pd.DataFrame, label: str):
+        outcome = select(frame)
+        done["count"] += 1
+        progress(done["count"], 2, f"Concluida: {label}")
+        return outcome
+
+    progress(0, 2, "Series limpa e ruidosa em paralelo")
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="bench") as pool:
+        clean_future = pool.submit(run_one, df, "serie limpa")
+        noisy_future = pool.submit(run_one, noisy, "serie com ruido severo")
+        clean_summary, clean_combo = clean_future.result()
+        noisy_summary, noisy_combo = noisy_future.result()
 
     threshold = params["probability_threshold"]
     clean = _evaluate(clean_summary, truth, threshold)

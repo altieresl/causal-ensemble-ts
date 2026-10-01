@@ -8,15 +8,17 @@ e cancelamento entre replicas.
 
 from __future__ import annotations
 
+import os
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
 from ..adapters.serialization import frame_records, to_jsonable
-from ..domain import DomainError
+from ..domain import DomainError, RunCancelledError
 from . import analysis
 from .pipeline import preprocess, run_robust_selection, soft_voting
 
@@ -35,6 +37,7 @@ DEFAULTS: dict[str, Any] = {
     "quick_mode": False,
     "n_bootstrap": None,
     "parallel_jobs": None,
+    "parallel_replicas": None,
     "methods": None,
     "decomposition_period": None,
     "columns": None,
@@ -53,6 +56,19 @@ def normalize_params(raw: dict[str, Any]) -> dict[str, Any]:
     if params["methods"] is not None and len(params["methods"]) < 2:
         raise DomainError("Selecione ao menos 2 metodos.")
     return params
+
+
+def plan_parallelism(params: dict[str, Any], n_replicates: int) -> tuple[int, int]:
+    """(replicas simultaneas, jobs por replica): divide o orcamento de CPU sem oversubscription.
+
+    Cada replica ja paraleliza os metodos em threads (``parallel_jobs``); rodar varias replicas
+    ao mesmo tempo so ajuda se o orcamento total for dividido entre elas.
+    """
+    cpus = os.cpu_count() or 2
+    workers = params.get("parallel_replicas") or max(1, min(3, cpus // 4))
+    workers = max(1, min(int(workers), n_replicates))
+    jobs = params.get("parallel_jobs") or max(1, min(4, max(1, cpus - 1) // workers))
+    return workers, int(jobs)
 
 
 def holm_adjust(p_values: Any) -> np.ndarray:
@@ -228,17 +244,39 @@ def run_replicated_validation(
     ids = sample_replicate_ids(
         bundle.trajectory_count, excluded_trajectories, params["n_replicates"], params["replicate_seed"]
     )
-    metric_rows: list[dict[str, Any]] = []
-    selection_rows: list[dict[str, Any]] = []
-    failures: list[dict[str, Any]] = []
-    for position, replicate_id in enumerate(ids):
-        progress(position, len(ids), f"Replica {replicate_id} ({position + 1}/{len(ids)})")
+    workers, jobs_per_replicate = plan_parallelism(params, len(ids))
+    replicate_params = {**params, "parallel_jobs": jobs_per_replicate}
+
+    def work(replicate_id: int):
         try:
-            rows, selection_row = _run_replicate(bundle, replicate_id, params, names, columns)
-            metric_rows.extend(rows)
-            selection_rows.append(selection_row)
+            return replicate_id, _run_replicate(bundle, replicate_id, replicate_params, names, columns), None
         except Exception as error:  # noqa: BLE001 - uma replica com falha nao derruba as demais
-            failures.append({"replicate_id": int(replicate_id), "error_type": type(error).__name__, "error": str(error)})
+            return replicate_id, None, {
+                "replicate_id": int(replicate_id), "error_type": type(error).__name__, "error": str(error)
+            }
+
+    outcomes: dict[int, tuple[Any, Any]] = {}
+    failures: list[dict[str, Any]] = []
+    progress(0, len(ids), f"Iniciando {len(ids)} replicas ({workers} em paralelo, {jobs_per_replicate} jobs cada)")
+    pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="replica")
+    try:
+        futures = [pool.submit(work, replicate_id) for replicate_id in ids]
+        for finished, future in enumerate(as_completed(futures), start=1):
+            replicate_id, outcome, failure = future.result()
+            if failure is not None:
+                failures.append(failure)
+            else:
+                outcomes[replicate_id] = outcome
+            progress(finished, len(ids), f"Replicas concluidas: {finished}/{len(ids)} (ultima: {replicate_id})")
+    except RunCancelledError:
+        pool.shutdown(wait=False, cancel_futures=True)  # replicas em andamento terminam sozinhas
+        raise
+    finally:
+        pool.shutdown(wait=True)
+    # Ordem estavel por id de replica, independente da ordem de termino.
+    metric_rows = [row for rid in sorted(outcomes) for row in outcomes[rid][0]]
+    selection_rows = [outcomes[rid][1] for rid in sorted(outcomes)]
+    failures.sort(key=lambda f: f["replicate_id"])
     progress(len(ids), len(ids), "Concluido")
 
     metrics = pd.DataFrame(metric_rows)

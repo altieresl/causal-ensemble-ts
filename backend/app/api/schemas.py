@@ -142,6 +142,7 @@ class ReplicatedValidationRequest(BaseModel):
     n_bootstrap: int | None = Field(default=None, ge=1, le=100)
     methods: list[str] | None = None
     decomposition_period: int | None = Field(default=None, ge=2)
+    parallel_replicas: int | None = Field(default=None, ge=1, le=8)  # None = automatico
 
 
 class AtlasExperimentRequest(BaseModel):
@@ -161,6 +162,7 @@ class AtlasChatRequest(BaseModel):
     columns: list[str] | None = None
     model: str | None = None
     max_retries: int = Field(default=1, ge=0, le=3)
+    parallel_calls: int = Field(default=4, ge=1, le=8)  # chamadas simultaneas ao Ollama
     declared_causal_sufficiency: bool | None = None
 
 

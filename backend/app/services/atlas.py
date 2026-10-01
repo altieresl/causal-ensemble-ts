@@ -131,14 +131,36 @@ class AtlasService:
         progress(0, 1, "Consultando o Ollama (um algoritmo por chamada)")
         kwargs = {"model": params["model"]} if params.get("model") else {}
         try:
-            chat = recommend_methods_via_chat(profile, max_retries=int(params.get("max_retries", 1)), **kwargs)
+            chat = recommend_methods_via_chat(
+                profile,
+                max_retries=int(params.get("max_retries", 1)),
+                max_workers=int(params.get("parallel_calls", 4)),
+                **kwargs,
+            )
         except rag_chat.RagChatError as error:
             raise ServiceUnavailableError(str(error)) from error
         progress(1, 1, "Concluido")
         chat_included = sorted(chat.included)
+        by_name = {r.framework_method_name: r for r in recommendations}
+        decisions = []
+        for decision in chat.decisions:
+            statistical_rec = by_name.get(decision.name)
+            item = {k: v for k, v in asdict(decision).items() if k not in {"prompt", "raw_response"}}
+            # Por que o chat votou assim e se isso bate com o filtro estatistico (premissas das fichas).
+            item["statistical_included"] = statistical_rec.included if statistical_rec else None
+            item["statistical_reasons"] = list(statistical_rec.reasons) if statistical_rec else []
+            item["agrees"] = statistical_rec is not None and statistical_rec.included == decision.include
+            decisions.append(item)
         return to_jsonable(
             {
                 "profile_text": profile.to_query_text(),
+                "profile_summary": {
+                    "n_variables": profile.n_variables,
+                    "n_timepoints": profile.n_timepoints,
+                    "stationary_fraction": profile.stationary_fraction,
+                    "linear_fraction": profile.linear_fraction,
+                    "non_gaussian_fraction": profile.non_gaussian_fraction,
+                },
                 "statistical": {
                     "included": statistical,
                     "recommendations": [
@@ -154,10 +176,7 @@ class AtlasService:
                     "included": chat_included,
                     "excluded": sorted(chat.excluded),
                     "justification": chat.justification,
-                    "decisions": [
-                        {k: v for k, v in asdict(d).items() if k not in {"prompt", "raw_response"}}
-                        for d in chat.decisions
-                    ],
+                    "decisions": decisions,
                 },
                 "agreement": {
                     "only_statistical": sorted(set(statistical) - set(chat_included)),

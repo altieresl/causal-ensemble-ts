@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import pandas as pd
@@ -163,7 +164,11 @@ def soft_voting(summary: pd.DataFrame, threshold: float) -> pd.DataFrame:
 
 
 def run_pipeline(dataset: Any, params: RunParams) -> dict[str, Any]:
-    """Executa pre-processamento + selecao robusta e devolve um resultado JSON-ready."""
+    """Executa pre-processamento + selecao robusta e devolve um resultado JSON-ready.
+
+    A evidencia de painel (PCMCI em todas as trajetorias) depende so do dataset e das relacoes,
+    nao da selecao; por isso roda em paralelo com ela (a selecao continua cega ao gabarito).
+    """
     from causal_discovery import compute_undirected_skeleton_metrics
 
     columns = list(params.columns or dataset.selected_columns)
@@ -174,43 +179,57 @@ def run_pipeline(dataset: Any, params: RunParams) -> dict[str, Any]:
         normalize=params.normalize,
         decomposition_period=params.decomposition_period,
     )
-
-    selection, selection_args, _names, relations = run_robust_selection(
-        processed,
-        params.methods,
-        quick_mode=params.quick_mode,
-        n_bootstrap=params.n_bootstrap,
-        parallel_jobs=params.parallel_jobs,
-        max_lag=params.max_lag,
-        random_state=params.random_state,
-        expert_knowledge=params.expert_knowledge,
-        relations=params.selected_relations,
-    )
-    best = selection["best_evaluation"]
-    summary = soft_voting(best["probabilistic_summary"], params.ensemble_threshold)
-
-    stability = best["stability"]
-    stable = stability.loc[stability["stability_selected"]] if "stability_selected" in stability else stability.iloc[0:0]
-    consistency = best["consistency"]
-
-    validation = comparison = panel = None
     ground_truth = dataset.ground_truth
-    comparison = analysis.compare_strategies(
-        selection, summary, ground_truth=ground_truth, nodes=columns,
-        relations=relations, threshold=params.ensemble_threshold,
-    )
-    if not ground_truth.empty:
-        validation = compute_undirected_skeleton_metrics(
-            analysis.selected_frame(summary, params.ensemble_threshold),
-            ground_truth,
-            prob_threshold=0.0,
-            nodes=columns,
-            evaluated_relations=relations,
-        )
-        if params.panel_evidence:
-            panel = analysis.panel_evidence(
-                dataset, relations=relations, max_lag=params.panel_max_lag, ground_truth=ground_truth
+    all_pairs = [(s, t) for s in processed.columns for t in processed.columns if s != t]
+    planned_relations = [tuple(r) for r in (params.selected_relations or all_pairs)]
+    wants_panel = params.panel_evidence and not ground_truth.empty and dataset.trajectory_count > 1
+
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="panel") as side:
+        panel_future = (
+            side.submit(
+                analysis.panel_evidence,
+                dataset,
+                relations=planned_relations,
+                max_lag=params.panel_max_lag,
+                ground_truth=ground_truth,
             )
+            if wants_panel
+            else None
+        )
+        selection, selection_args, _names, relations = run_robust_selection(
+            processed,
+            params.methods,
+            quick_mode=params.quick_mode,
+            n_bootstrap=params.n_bootstrap,
+            parallel_jobs=params.parallel_jobs,
+            max_lag=params.max_lag,
+            random_state=params.random_state,
+            expert_knowledge=params.expert_knowledge,
+            relations=params.selected_relations,
+        )
+        best = selection["best_evaluation"]
+        summary = soft_voting(best["probabilistic_summary"], params.ensemble_threshold)
+
+        stability = best["stability"]
+        stable = (
+            stability.loc[stability["stability_selected"]] if "stability_selected" in stability else stability.iloc[0:0]
+        )
+        consistency = best["consistency"]
+
+        comparison = analysis.compare_strategies(
+            selection, summary, ground_truth=ground_truth, nodes=columns,
+            relations=relations, threshold=params.ensemble_threshold,
+        )
+        validation = None
+        if not ground_truth.empty:
+            validation = compute_undirected_skeleton_metrics(
+                analysis.selected_frame(summary, params.ensemble_threshold),
+                ground_truth,
+                prob_threshold=0.0,
+                nodes=columns,
+                evaluated_relations=relations,
+            )
+        panel = panel_future.result() if panel_future is not None else None
 
     combination = selection["best_combination"]
     return to_jsonable(

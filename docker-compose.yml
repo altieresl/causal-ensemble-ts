@@ -4,7 +4,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      CAUSAL_MAX_WORKERS: "1"
+      CAUSAL_MAX_WORKERS: "2"
     volumes:
       - causal-data:/data   # uploads e execucoes sobrevivem a recriacao do container
 

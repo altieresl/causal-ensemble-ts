@@ -87,6 +87,13 @@
               }
             ],
             "title": "Model"
+          },
+          "parallel_calls": {
+            "default": 4,
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Parallel Calls",
+            "type": "integer"
           }
         },
         "required": [
@@ -780,6 +787,19 @@
             "minimum": 2.0,
             "title": "N Replicates",
             "type": "integer"
+          },
+          "parallel_replicas": {
+            "anyOf": [
+              {
+                "maximum": 8.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parallel Replicas"
           },
           "quick_mode": {
             "default": false,
