@@ -294,6 +294,8 @@ comparação são calculadas apenas após a seleção dos métodos. Detalhes em 
 O que é independente roda em paralelo: réplicas (com o orçamento de CPU dividido), as duas séries do
 benchmark, a evidência de painel junto da seleção e as chamadas do chat ao Ollama. O chat explica,
 para cada algoritmo, o que leu do perfil, quais premissas aplicou e se concorda com o filtro estatístico.
+A interface tem um perfil Iniciante (valores padrão e explicações) e um Avançado (todos os parâmetros);
+o experimento do atlas compara tempo e resultado entre o filtro de premissas suave e o rígido.
 
 ## Conhecimento especialista
 
