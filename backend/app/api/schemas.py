@@ -168,6 +168,22 @@ class AtlasChatRequest(BaseModel):
     declared_causal_sufficiency: bool | None = None
 
 
+class AssistantMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class AssistantContext(BaseModel):
+    kind: Literal["dataset", "run"]
+    id: str = Field(min_length=1, max_length=64)
+
+
+class AssistantRequest(BaseModel):
+    messages: list[AssistantMessage] = Field(min_length=1, max_length=40)
+    context: AssistantContext | None = None  # o que o usuario esta vendo (dataset ou execucao)
+    model: str | None = None
+
+
 class AskRequest(BaseModel):
     query: str = Field(min_length=3, max_length=500)
     k: int = Field(default=4, ge=1, le=10)

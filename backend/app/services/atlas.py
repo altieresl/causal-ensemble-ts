@@ -25,6 +25,9 @@ class AtlasService:
         self._retriever = None
 
     # -- fichas -----------------------------------------------------------
+    def cards(self) -> dict[str, Any]:
+        return self._cards()
+
     def _cards(self) -> dict[str, Any]:
         from causal_algorithms_atlas.loader import load_algorithm_cards
 
@@ -68,7 +71,9 @@ class AtlasService:
 
         if self._retriever is None:
             self._retriever = rag_chat.build_retriever(cards_to_chunks(self._cards()))
-        retrieved = self._retriever.top_k(query, k=k)
+        from .retrieval import retrieve
+
+        retrieved = retrieve(self._retriever, self._cards(), query, k=k)
         answer: str | None = None
         error: str | None = None
         if generate:

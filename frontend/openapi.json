@@ -39,6 +39,93 @@
         "title": "AskRequest",
         "type": "object"
       },
+      "AssistantContext": {
+        "properties": {
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "dataset",
+              "run"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ],
+        "title": "AssistantContext",
+        "type": "object"
+      },
+      "AssistantMessage": {
+        "properties": {
+          "content": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "AssistantMessage",
+        "type": "object"
+      },
+      "AssistantRequest": {
+        "properties": {
+          "context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssistantContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/AssistantMessage"
+            },
+            "maxItems": 40,
+            "minItems": 1,
+            "title": "Messages",
+            "type": "array"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "required": [
+          "messages"
+        ],
+        "title": "AssistantRequest",
+        "type": "object"
+      },
       "AtlasChatRequest": {
         "properties": {
           "columns": {
@@ -982,6 +1069,70 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/assistant/chat": {
+      "post": {
+        "description": "Resposta em streaming (NDJSON): ``sources`` → ``token``* → ``done`` | ``error``.",
+        "operationId": "assistant_chat_api_v1_assistant_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Assistant Chat",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
+    "/api/v1/assistant/status": {
+      "get": {
+        "description": "Disponibilidade do Ollama e modelos baixados (para a interface avisar antes de perguntar).",
+        "operationId": "assistant_status_api_v1_assistant_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Assistant Status Api V1 Assistant Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Assistant Status",
+        "tags": [
+          "assistant"
+        ]
+      }
+    },
     "/api/v1/atlas/algorithms": {
       "get": {
         "description": "Fichas verificadas do atlas de algoritmos (premissas, familia, referencias).",

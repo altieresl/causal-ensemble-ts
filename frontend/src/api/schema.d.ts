@@ -4,6 +4,46 @@
  */
 
 export interface paths {
+    "/api/v1/assistant/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Assistant Chat
+         * @description Resposta em streaming (NDJSON): ``sources`` → ``token``* → ``done`` | ``error``.
+         */
+        post: operations["assistant_chat_api_v1_assistant_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assistant/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Assistant Status
+         * @description Disponibilidade do Ollama e modelos baixados (para a interface avisar antes de perguntar).
+         */
+        get: operations["assistant_status_api_v1_assistant_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/atlas/algorithms": {
         parameters: {
             query?: never;
@@ -304,6 +344,34 @@ export interface components {
             model?: string | null;
             /** Query */
             query: string;
+        };
+        /** AssistantContext */
+        AssistantContext: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "dataset" | "run";
+        };
+        /** AssistantMessage */
+        AssistantMessage: {
+            /** Content */
+            content: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+        };
+        /** AssistantRequest */
+        AssistantRequest: {
+            context?: components["schemas"]["AssistantContext"] | null;
+            /** Messages */
+            messages: components["schemas"]["AssistantMessage"][];
+            /** Model */
+            model?: string | null;
         };
         /** AtlasChatRequest */
         AtlasChatRequest: {
@@ -664,6 +732,61 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    assistant_chat_api_v1_assistant_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assistant_status_api_v1_assistant_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     list_algorithms_api_v1_atlas_algorithms_get: {
         parameters: {
             query?: never;

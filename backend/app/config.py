@@ -17,6 +17,7 @@ class Settings:
     max_upload_bytes: int
     max_workers: int
     frontend_dist: Path | None
+    ollama_url: str = "http://localhost:11434"
 
     @property
     def uploads_dir(self) -> Path:
@@ -38,4 +39,5 @@ class Settings:
             max_upload_bytes=int(os.environ.get("CAUSAL_MAX_UPLOAD_MB", "20")) * 1024 * 1024,
             max_workers=max(1, int(os.environ.get("CAUSAL_MAX_WORKERS", "2"))),
             frontend_dist=dist if dist.is_dir() else None,
+            ollama_url=os.environ.get("CAUSAL_OLLAMA_URL", "http://localhost:11434"),
         )
