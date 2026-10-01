@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import warnings
 
 import numpy as np
@@ -40,12 +42,7 @@ def run_classical_granger(
                     continue
                 series = validated[target].dropna()
                 try:
-                    autoregression = AutoReg(
-                        series,
-                        lags=max_lag,
-                        trend="c",
-                        old_names=False,
-                    ).fit()
+                    autoregression = AutoReg(series, lags=max_lag, trend="c").fit()
                 except Exception:
                     continue
 
@@ -79,9 +76,11 @@ def run_classical_granger(
                 continue
 
             try:
-                with warnings.catch_warnings():
+                # statsmodels 0.15 removeu ``verbose``; nas versoes anteriores o
+                # padrao imprime as tabelas, entao a saida e descartada aqui.
+                with warnings.catch_warnings(), contextlib.redirect_stdout(io.StringIO()):
                     warnings.simplefilter("ignore", FutureWarning)
-                    result = grangercausalitytests(pair, maxlag=[max_lag], verbose=False)
+                    result = grangercausalitytests(pair, maxlag=[max_lag])
             except Exception:
                 continue
 
