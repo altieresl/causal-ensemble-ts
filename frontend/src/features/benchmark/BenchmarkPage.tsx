@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useCreateBenchmark } from "../../api/hooks";
-import { Card, ErrorBox } from "../../components/ui";
+import { Card, ErrorBox, PageHeader } from "../../components/ui";
 import { MethodChecklist } from "../runs/MethodChecklist";
 
 /** Benchmark sintético (gerador com estrutura conhecida) + robustez a mudança no regime de ruído. */
@@ -36,11 +36,16 @@ export function BenchmarkPage() {
 
   return (
     <form className="stack" onSubmit={submit}>
-      <h1>Benchmark sintético</h1>
-      <p className="muted">
+      <PageHeader
+        title="Benchmark sintético"
+        crumbs={[{ label: "Benchmark" }]}
+        lead={
+          <>
         Gera séries com estrutura causal conhecida, roda a seleção robusta (consenso de 2 entre 3 métodos) e repete
         após multiplicar o ruído a partir de um ponto. O gabarito é usado só na avaliação, depois da seleção.
-      </p>
+          </>
+        }
+      />
       <Card title="Série">
         <div className="form-grid">
           <label>

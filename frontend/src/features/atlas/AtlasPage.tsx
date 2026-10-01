@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useAlgorithms, useAsk } from "../../api/hooks";
 import type { Algorithm } from "../../api/types";
-import { Badge, Card, ErrorBox, Spinner, TableWrap } from "../../components/ui";
+import { Badge, Card, ErrorBox, PageHeader, PageSkeleton, TableWrap } from "../../components/ui";
 
 const yesNo = (value: boolean) => (value ? "sim" : "não");
 
@@ -123,12 +123,16 @@ export function AtlasPage() {
   const algorithms = useAlgorithms();
   return (
     <div className="stack">
-      <h1>Atlas de algoritmos</h1>
-      <p className="muted">
+      <PageHeader
+        title="Atlas de algoritmos"
+        lead={
+          <>
         Fichas com premissas declaradas e referências. A recomendação de métodos usa só essas premissas e o perfil dos
         dados — nunca o gabarito.
-      </p>
-      {algorithms.isPending && <Spinner />}
+          </>
+        }
+      />
+      {algorithms.isPending && <PageSkeleton />}
       {algorithms.isError && <ErrorBox error={algorithms.error} />}
       {algorithms.data && (
         <Card>

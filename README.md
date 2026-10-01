@@ -291,6 +291,9 @@ benchmark sintético com mudança no regime de ruído, validação estatística 
 local (Ollama) e consulta RAG às fichas dos algoritmos. A validação contra o grafo verdadeiro e a
 comparação são calculadas apenas após a seleção dos métodos. Detalhes em `backend/README.md` e
 `frontend/README.md`; as análises longas (minutos) são assíncronas, com progresso e cancelamento.
+O que é independente roda em paralelo: réplicas (com o orçamento de CPU dividido), as duas séries do
+benchmark, a evidência de painel junto da seleção e as chamadas do chat ao Ollama. O chat explica,
+para cada algoritmo, o que leu do perfil, quais premissas aplicou e se concorda com o filtro estatístico.
 
 ## Conhecimento especialista
 

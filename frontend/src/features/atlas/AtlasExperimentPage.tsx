@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { useCreateAtlasChat, useCreateAtlasExperiment, useDataset } from "../../api/hooks";
-import { Card, ErrorBox, Spinner } from "../../components/ui";
+import { Card, ErrorBox, PageHeader, PageSkeleton } from "../../components/ui";
 
 type Sufficiency = "unknown" | "yes" | "no";
 const SUFFICIENCY: Record<Sufficiency, boolean | null> = { unknown: null, yes: true, no: false };
@@ -33,7 +33,7 @@ export function AtlasExperimentPage() {
   const [softFilter, setSoftFilter] = useState(true);
   const [sufficiency, setSufficiency] = useState<Sufficiency>("unknown");
 
-  if (dataset.isPending) return <Spinner />;
+  if (dataset.isPending) return <PageSkeleton />;
   if (dataset.isError) return <ErrorBox error={dataset.error} />;
 
   const submit = (event: React.FormEvent) => {
@@ -54,11 +54,16 @@ export function AtlasExperimentPage() {
 
   return (
     <form className="stack" onSubmit={submit}>
-      <h1>Experimento do atlas — {dataset.data.entry.name}</h1>
-      <p className="muted">
+      <PageHeader
+        title="Experimento do atlas"
+        crumbs={[{ label: "Datasets", to: "/" }, { label: dataset.data.entry.name, to: `/datasets/${id}` }, { label: "Experimento do atlas" }]}
+        lead={
+          <>
         Perfila o dataset, escolhe candidatos pelas premissas declaradas nas fichas verificadas e seleciona a melhor
         combinação com métricas cegas ao gabarito. O grafo verdadeiro (se houver) só é consultado depois.
-      </p>
+          </>
+        }
+      />
       <Card title="Parâmetros">
         <div className="form-grid">
           <label>
@@ -101,9 +106,10 @@ export function AtlasChatPage() {
   const dataset = useDataset(id);
   const create = useCreateAtlasChat();
   const [model, setModel] = useState("");
+  const [parallelCalls, setParallelCalls] = useState(4);
   const [sufficiency, setSufficiency] = useState<Sufficiency>("unknown");
 
-  if (dataset.isPending) return <Spinner />;
+  if (dataset.isPending) return <PageSkeleton />;
   if (dataset.isError) return <ErrorBox error={dataset.error} />;
 
   const submit = (event: React.FormEvent) => {
@@ -113,6 +119,7 @@ export function AtlasChatPage() {
         dataset_id: id,
         model: model.trim() || null,
         max_retries: 1,
+        parallel_calls: parallelCalls,
         declared_causal_sufficiency: SUFFICIENCY[sufficiency],
       },
       { onSuccess: (run) => navigate(`/runs/${run.id}`) },
@@ -121,17 +128,27 @@ export function AtlasChatPage() {
 
   return (
     <form className="stack" onSubmit={submit}>
-      <h1>Seleção via chat — {dataset.data.entry.name}</h1>
-      <p className="muted">
+      <PageHeader
+        title="Seleção via chat"
+        crumbs={[{ label: "Datasets", to: "/" }, { label: dataset.data.entry.name, to: `/datasets/${id}` }, { label: "Seleção via chat" }]}
+        lead={
+          <>
         Pede a um LLM local (Ollama) que decida, um algoritmo por vez, quais métodos entram, a partir do mesmo perfil e
         das mesmas premissas do filtro estatístico — sem acesso ao gabarito. Requer o serviço <code>ollama serve</code>{" "}
         e o modelo baixado no servidor da API.
-      </p>
+          </>
+        }
+      />
       <Card title="Parâmetros">
         <div className="form-grid">
           <label>
             Modelo (vazio = padrão do servidor)
             <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="qwen2.5:7b" />
+          </label>
+          <label>
+            Chamadas simultâneas ao Ollama ({parallelCalls})
+            <input type="range" min={1} max={8} value={parallelCalls} onChange={(e) => setParallelCalls(Number(e.target.value))} />
+            <span className="muted small">Cada algoritmo é uma chamada independente; o ganho depende de OLLAMA_NUM_PARALLEL.</span>
           </label>
           <SufficiencySelect value={sufficiency} onChange={setSufficiency} />
         </div>

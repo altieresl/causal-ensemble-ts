@@ -29,10 +29,13 @@ export function useDeleteDataset() {
   });
 }
 
-export const useProfile = () =>
-  useMutation({
-    mutationFn: ({ id, ...body }: { id: string; columns?: string[]; declared_causal_sufficiency?: boolean | null }) =>
-      api.profileDataset(id, body),
+/** Perfil do dataset: roda sozinho (em paralelo com os detalhes) e é cacheado por suficiência declarada. */
+export const useProfile = (id: string, declaredCausalSufficiency: boolean | null) =>
+  useQuery({
+    queryKey: ["profile", id, declaredCausalSufficiency],
+    queryFn: () => api.profileDataset(id, { declared_causal_sufficiency: declaredCausalSufficiency }),
+    staleTime: Infinity,
+    retry: 0,
   });
 
 export const useRuns = () =>

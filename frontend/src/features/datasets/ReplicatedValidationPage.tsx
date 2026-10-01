@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { useCreateReplicatedValidation, useDataset } from "../../api/hooks";
-import { Card, ErrorBox, Spinner } from "../../components/ui";
+import { Card, ErrorBox, PageHeader, PageSkeleton } from "../../components/ui";
 import { MethodChecklist } from "../runs/MethodChecklist";
 
 /** Validação estatística pareada (Wilcoxon + Holm + IC + taxa de vitórias) sobre réplicas independentes. */
@@ -19,9 +19,10 @@ export function ReplicatedValidationPage() {
   const [minConfirmatory, setMinConfirmatory] = useState(10);
   const [maxLag, setMaxLag] = useState(2);
   const [quickMode, setQuickMode] = useState(false);
+  const [parallelReplicas, setParallelReplicas] = useState("");
   const [methods, setMethods] = useState<string[]>([]);
 
-  if (dataset.isPending) return <Spinner />;
+  if (dataset.isPending) return <PageSkeleton />;
   if (dataset.isError) return <ErrorBox error={dataset.error} />;
   const details = dataset.data;
 
@@ -52,6 +53,7 @@ export function ReplicatedValidationPage() {
         min_confirmatory_replicates: minConfirmatory,
         max_lag: maxLag,
         quick_mode: quickMode,
+        parallel_replicas: parallelReplicas ? Number(parallelReplicas) : null,
         methods,
         ensemble_threshold: 0.5,
         replicate_seed: 2029,
@@ -62,12 +64,17 @@ export function ReplicatedValidationPage() {
 
   return (
     <form className="stack" onSubmit={submit}>
-      <h1>Validação com réplicas — {details.entry.name}</h1>
-      <p className="muted">
+      <PageHeader
+        title="Validação com réplicas"
+        crumbs={[{ label: "Datasets", to: "/" }, { label: details.entry.name, to: `/datasets/${id}` }, { label: "Validação com réplicas" }]}
+        lead={
+          <>
         Uma única execução não é evidência estatística de superioridade. Esta análise reexecuta o ENSEMBLE_AUTO em
         trajetórias independentes (as já usadas como desenvolvimento/holdout ficam fora da amostra) e compara a precisão
         pareada contra cada método e contra o ensemble completo.
-      </p>
+          </>
+        }
+      />
       <Card title="Réplicas e estatística">
         <div className="form-grid">
           <label>
@@ -97,6 +104,11 @@ export function ReplicatedValidationPage() {
           <label>
             Lag máximo
             <input type="number" min={1} max={20} value={maxLag} onChange={(e) => setMaxLag(Number(e.target.value))} />
+          </label>
+          <label>
+            Réplicas em paralelo (vazio = automático)
+            <input type="number" min={1} max={8} value={parallelReplicas} onChange={(e) => setParallelReplicas(e.target.value)} />
+            <span className="muted small">O orçamento de CPU é dividido entre elas; os resultados são idênticos aos da execução sequencial.</span>
           </label>
         </div>
         <label className="check">

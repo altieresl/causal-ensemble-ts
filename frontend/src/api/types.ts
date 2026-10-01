@@ -201,8 +201,37 @@ export interface AtlasExperimentResult {
   flagged_methods_in_best_combination?: string[];
 }
 
+export interface ChatDecision {
+  name: string;
+  include: boolean;
+  reason: string;
+  retried: boolean;
+  synthesis_corrected: boolean;
+  // Leitura do perfil e das premissas feita pelo chat (campos obrigatórios do schema JSON dele).
+  stationary_fraction_pct: number | null;
+  dataset_is_majority_stationary: boolean | null;
+  linear_fraction_pct: number | null;
+  dataset_is_majority_linear: boolean | null;
+  non_gaussian_fraction_pct: number | null;
+  dataset_is_majority_non_gaussian: boolean | null;
+  algorithm_requires_stationarity: boolean | null;
+  algorithm_requires_linearity: boolean | null;
+  algorithm_requires_non_gaussian_errors: boolean | null;
+  // Comparação com o filtro estatístico determinístico (premissas das fichas do atlas).
+  statistical_included: boolean | null;
+  statistical_reasons: string[];
+  agrees: boolean;
+}
+
 export interface ChatResult {
   profile_text: string;
+  profile_summary: {
+    n_variables: number;
+    n_timepoints: number;
+    stationary_fraction: number;
+    linear_fraction: number;
+    non_gaussian_fraction: number;
+  };
   statistical: {
     included: string[];
     recommendations: { method: string; included: boolean; reasons: string[] }[];
@@ -211,7 +240,7 @@ export interface ChatResult {
     included: string[];
     excluded: string[];
     justification: string;
-    decisions: { name: string; include: boolean; reason: string; retried: boolean; synthesis_corrected: boolean }[];
+    decisions: ChatDecision[];
   };
   agreement: { only_statistical: string[]; only_chat: string[]; shared: string[] };
 }
