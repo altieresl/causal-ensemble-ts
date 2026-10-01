@@ -6,6 +6,7 @@ pos-hoc do experimento (mesma disciplina de ``causal_algorithms_atlas``).
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
@@ -87,21 +88,18 @@ class AtlasService:
         }
 
     # -- execucoes (roda em segundo plano) --------------------------------
-    def run_experiment(self, bundle: Any, params: dict[str, Any], progress: ProgressFn) -> dict[str, Any]:
+    def _run_experiment_variant(self, data: Any, truth: Any, params: dict[str, Any], *, soft: bool) -> dict[str, Any]:
+        """Uma variante do experimento (filtro suave ou rigido), cronometrada."""
         from causal_algorithms_atlas.experiment_runner import InsufficientCandidatesError, run_experiment
 
-        data = bundle.data
-        if params.get("max_rows"):
-            data = data.iloc[: int(params["max_rows"])].reset_index(drop=True)
-        truth = bundle.ground_truth if not bundle.ground_truth.empty else None
-        progress(0, 1, "Perfil, recomendacao e selecao")
+        started = time.perf_counter()
         try:
             result = run_experiment(
                 data,
                 ground_truth=truth,
-                dataset_name=str(params["dataset_id"]),
+                dataset_name=f"{params['dataset_id']}_{'soft' if soft else 'rigid'}",
                 candidate_method_names=set(params["methods"]) if params.get("methods") else None,
-                use_assumption_soft_filter=bool(params.get("use_assumption_soft_filter", True)),
+                use_assumption_soft_filter=soft,
                 max_lag=int(params["max_lag"]),
                 n_bootstrap=int(params["n_bootstrap"]),
                 max_methods=params.get("max_methods"),
@@ -113,8 +111,68 @@ class AtlasService:
             outcome = {"outcome": "completed", **result}
         except InsufficientCandidatesError as error:
             outcome = {"outcome": "insufficient_candidates", "message": str(error)}
-        progress(1, 1, "Concluido")
-        return to_jsonable(outcome)
+        outcome["elapsed_seconds"] = time.perf_counter() - started
+        return outcome
+
+    @staticmethod
+    def _variant_summary(outcome: dict[str, Any], label: str) -> dict[str, Any]:
+        post_hoc = outcome.get("best_combination_metrics_post_hoc") or {}
+        single = outcome.get("best_single_metrics_post_hoc") or {}
+        return {
+            "filter": label,
+            "outcome": outcome["outcome"],
+            "message": outcome.get("message"),
+            "elapsed_seconds": outcome["elapsed_seconds"],
+            "candidate_methods": outcome.get("candidate_methods", []),
+            "combinations_evaluated": len(outcome.get("ranking", [])),
+            "best_combination": outcome.get("best_combination_methods"),
+            "best_combination_performance_score": outcome.get("best_combination_performance_score"),
+            "best_single_method": outcome.get("best_single_method"),
+            "f1_combination_post_hoc": post_hoc.get("f1_score"),
+            "f1_best_single_post_hoc": single.get("f1_score"),
+        }
+
+    def run_experiment(self, bundle: Any, params: dict[str, Any], progress: ProgressFn) -> dict[str, Any]:
+        """Experimento do atlas. Com ``compare_filters``, roda tambem a outra variante do filtro de
+        premissas (suave x rigido) para comparar tempo e resultado.
+
+        As variantes rodam em SEQUENCIA de proposito: em paralelo, uma disputaria CPU com a outra e o
+        tempo medido deixaria de refletir o custo de cada filtro.
+        """
+        data = bundle.data
+        if params.get("max_rows"):
+            data = data.iloc[: int(params["max_rows"])].reset_index(drop=True)
+        truth = bundle.ground_truth if not bundle.ground_truth.empty else None
+        soft_first = bool(params.get("use_assumption_soft_filter", True))
+        compare = bool(params.get("compare_filters", False))
+        total = 2 if compare else 1
+
+        label = "suave" if soft_first else "rigido"
+        progress(0, total, f"Filtro {label}: perfil, recomendacao e selecao")
+        primary = self._run_experiment_variant(data, truth, params, soft=soft_first)
+        result: dict[str, Any] = dict(primary)
+        if compare:
+            other = "rigido" if soft_first else "suave"
+            progress(1, total, f"Filtro {other}: perfil, recomendacao e selecao")
+            secondary = self._run_experiment_variant(data, truth, params, soft=not soft_first)
+            soft_run, rigid_run = (primary, secondary) if soft_first else (secondary, primary)
+            soft_summary = self._variant_summary(soft_run, "suave")
+            rigid_summary = self._variant_summary(rigid_run, "rigido")
+            result["filter_comparison"] = {
+                "soft": soft_summary,
+                "rigid": rigid_summary,
+                "seconds_saved_by_rigid": soft_summary["elapsed_seconds"] - rigid_summary["elapsed_seconds"],
+                "speedup_rigid": (
+                    soft_summary["elapsed_seconds"] / rigid_summary["elapsed_seconds"]
+                    if rigid_summary["elapsed_seconds"] > 0
+                    else None
+                ),
+                "excluded_by_rigid": sorted(
+                    set(soft_summary["candidate_methods"]) - set(rigid_summary["candidate_methods"])
+                ),
+            }
+        progress(total, total, "Concluido")
+        return to_jsonable(result)
 
     def run_chat_recommendation(self, bundle: Any, params: dict[str, Any], progress: ProgressFn) -> dict[str, Any]:
         """Compara a selecao do LLM local (Ollama) com o filtro estatistico deterministico."""
@@ -198,6 +256,7 @@ def validate_experiment_params(params: dict[str, Any]) -> dict[str, Any]:
         "use_assumption_soft_filter": True,
         "declared_causal_sufficiency": None,
         "methods": None,
+        "compare_filters": True,
         **{k: v for k, v in params.items() if v is not None or k in {"max_rows", "methods", "declared_causal_sufficiency"}},
     }
     if not 1 <= normalized["n_bootstrap"] <= 100:

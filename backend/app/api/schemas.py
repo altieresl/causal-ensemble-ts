@@ -154,6 +154,8 @@ class AtlasExperimentRequest(BaseModel):
     max_lag: int = Field(default=1, ge=1, le=20)
     methods: list[str] | None = None
     use_assumption_soft_filter: bool = True
+    # Roda tambem a outra variante do filtro de premissas (em sequencia) para comparar tempo e resultado.
+    compare_filters: bool = True
     declared_causal_sufficiency: bool | None = None
 
 

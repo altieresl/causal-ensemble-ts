@@ -330,6 +330,11 @@ export interface components {
         AtlasExperimentRequest: {
             /** Columns */
             columns?: string[] | null;
+            /**
+             * Compare Filters
+             * @default true
+             */
+            compare_filters: boolean;
             /** Dataset Id */
             dataset_id: string;
             /** Declared Causal Sufficiency */

@@ -80,3 +80,44 @@ def test_chat_result_explains_each_vote_and_compares_with_statistical_filter(toy
     assert summary["n_variables"] == profile.n_variables
     assert set(result["agreement"]) == {"only_statistical", "only_chat", "shared"}
     assert calls[-1][2] == "Concluido"
+
+
+def test_experiment_compares_soft_and_rigid_filters_sequentially(toy_bundle):
+    from causal_algorithms_atlas import experiment_runner
+
+    settings, bundle = toy_bundle
+    atlas = AtlasService(settings.repo_root, Path(settings.data_dir) / "history.jsonl")
+    order = []
+
+    def fake_run(data, *, use_assumption_soft_filter, **_kwargs):
+        order.append("soft" if use_assumption_soft_filter else "rigid")
+        if not use_assumption_soft_filter:
+            raise experiment_runner.InsufficientCandidatesError("so 1 metodo compativel")
+        return {
+            "candidate_methods": ["A", "B", "C"],
+            "ranking": [{}, {}, {}, {}],
+            "best_combination_methods": ["A", "B"],
+            "best_combination_performance_score": 0.7,
+            "best_single_method": "A",
+            "best_combination_metrics_post_hoc": {"f1_score": 0.8},
+            "best_single_metrics_post_hoc": {"f1_score": 0.6},
+        }
+
+    params = {"dataset_id": "toy_a", "max_lag": 1, "n_bootstrap": 2, "compare_filters": True}
+    with mock.patch.object(experiment_runner, "run_experiment", side_effect=fake_run):
+        result = atlas.run_experiment(bundle, params, lambda *_: None)
+
+    assert order == ["soft", "rigid"]  # em sequencia, a escolhida primeiro
+    assert result["outcome"] == "completed"  # resultado principal = filtro escolhido (suave)
+    comparison = result["filter_comparison"]
+    assert comparison["soft"]["combinations_evaluated"] == 4
+    assert comparison["soft"]["f1_combination_post_hoc"] == 0.8
+    assert comparison["rigid"]["outcome"] == "insufficient_candidates"
+    assert comparison["rigid"]["message"] == "so 1 metodo compativel"
+    assert comparison["excluded_by_rigid"] == ["A", "B", "C"]
+    assert comparison["soft"]["elapsed_seconds"] >= 0 and comparison["rigid"]["elapsed_seconds"] >= 0
+
+    order.clear()
+    with mock.patch.object(experiment_runner, "run_experiment", side_effect=fake_run):
+        single = atlas.run_experiment(bundle, {**params, "compare_filters": False}, lambda *_: None)
+    assert order == ["soft"] and "filter_comparison" not in single and "elapsed_seconds" in single

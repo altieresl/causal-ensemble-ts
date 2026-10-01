@@ -118,6 +118,11 @@
             ],
             "title": "Columns"
           },
+          "compare_filters": {
+            "default": true,
+            "title": "Compare Filters",
+            "type": "boolean"
+          },
           "dataset_id": {
             "title": "Dataset Id",
             "type": "string"
