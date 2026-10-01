@@ -296,6 +296,9 @@ benchmark, a evidência de painel junto da seleção e as chamadas do chat ao Ol
 para cada algoritmo, o que leu do perfil, quais premissas aplicou e se concorda com o filtro estatístico.
 A interface tem um perfil Iniciante (valores padrão e explicações) e um Avançado (todos os parâmetros);
 o experimento do atlas compara tempo e resultado entre o filtro de premissas suave e o rígido.
+Um assistente conversacional fica fixo na lateral (botão “Assistente”): responde em streaming com o
+Ollama local, cita as fichas do atlas que usou e considera o dataset ou a execução aberta — sem nunca
+receber dados derivados do grafo verdadeiro. Configure com `CAUSAL_OLLAMA_URL` e `CAUSAL_OLLAMA_MODEL`.
 
 ## Conhecimento especialista
 

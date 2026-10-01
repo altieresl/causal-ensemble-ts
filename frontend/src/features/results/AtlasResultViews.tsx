@@ -2,6 +2,7 @@ import type { AtlasExperimentResult, ChatDecision, ChatResult } from "../../api/
 import { Badge, Card, Stat, TableWrap } from "../../components/ui";
 import { explainDecision } from "../../lib/chatExplain";
 import { BeginnerHint } from "../../lib/experience";
+import { useOptionalAssistant } from "../assistant/AssistantProvider";
 import { formatNumber, formatPercent } from "../../lib/format";
 import { formatElapsed } from "../../lib/useElapsed";
 import { FilterComparisonCard } from "./FilterComparisonCard";
@@ -117,6 +118,7 @@ function FractionBar({ label, value }: { label: string; value: number }) {
 /** Um voto do chat, explicado: o que ele leu, quais premissas aplicou e se concorda com o filtro estatístico. */
 function DecisionExplanationCard({ decision }: { decision: ChatDecision }) {
   const explanation = explainDecision(decision);
+  const assistant = useOptionalAssistant();
   return (
     <details className={`explain${decision.agrees ? "" : " disagree"}`}>
       <summary>
@@ -183,6 +185,20 @@ function DecisionExplanationCard({ decision }: { decision: ChatDecision }) {
           )}
         </div>
 
+        {assistant && (
+          <div>
+            <button
+              type="button"
+              onClick={() =>
+                assistant.ask(
+                  `Por que o chat votou ${decision.include ? "incluir" : "excluir"} o ${decision.name}${decision.agrees ? "" : ", divergindo do filtro estatístico"}? Ele está certo?`,
+                )
+              }
+            >
+              Perguntar ao assistente sobre este voto
+            </button>
+          </div>
+        )}
         {(decision.retried || decision.synthesis_corrected) && (
           <p className="muted small">
             {decision.retried && "A resposta foi pedida de novo porque contradizia fatos verificáveis (percentuais do perfil). "}

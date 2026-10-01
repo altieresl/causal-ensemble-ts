@@ -5,6 +5,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { EmptyState } from "./components/ui";
 import { ExperienceToggle } from "./lib/experience";
 import { AtlasChatPage, AtlasExperimentPage } from "./features/atlas/AtlasExperimentPage";
+import { ChatDock } from "./features/assistant/ChatDock";
 import { AtlasPage } from "./features/atlas/AtlasPage";
 import { BenchmarkPage } from "./features/benchmark/BenchmarkPage";
 import { DatasetPage } from "./features/datasets/DatasetPage";
@@ -89,6 +90,7 @@ export function App() {
           </Routes>
         </ErrorBoundary>
       </main>
+      <ChatDock />
     </>
   );
 }

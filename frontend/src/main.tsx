@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./App";
 import { ToastProvider } from "./components/toast";
+import { AssistantProvider } from "./features/assistant/AssistantProvider";
 import { ExperienceProvider } from "./lib/experience";
 import "./styles.css";
 
@@ -18,7 +19,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       <ExperienceProvider>
         <ToastProvider>
           <BrowserRouter>
-            <App />
+            <AssistantProvider>
+              <App />
+            </AssistantProvider>
           </BrowserRouter>
         </ToastProvider>
       </ExperienceProvider>

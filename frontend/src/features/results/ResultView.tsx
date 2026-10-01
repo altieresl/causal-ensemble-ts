@@ -9,6 +9,7 @@ import { BeginnerHint, useExperience } from "../../lib/experience";
 import { formatNumber, formatPercent, heatColor } from "../../lib/format";
 import { collapseEdges } from "../../lib/graph";
 import { OBJECTIVE_LABELS, type ObjectiveType } from "../../lib/objective";
+import { useOptionalAssistant } from "../assistant/AssistantProvider";
 import { ComparisonTab } from "./ComparisonTab";
 import { EdgeGraph } from "./EdgeGraph";
 
@@ -41,6 +42,7 @@ export function ResultView({ result, runId }: { result: RunResult; runId: string
   const selected = useMemo(() => collapseEdges(result.edges, { selectedOnly: true, minProbability: 0 }), [result.edges]);
   const objective = result.objective?.type as ObjectiveType | undefined;
 
+  const assistant = useOptionalAssistant();
   const exportEdges = () => {
     downloadText(`${runId}-arestas.csv`, toCsv(result.edges as unknown as Record<string, unknown>[]), "text/csv");
     notify("Arestas exportadas em CSV.", "success");
@@ -70,6 +72,11 @@ export function ResultView({ result, runId }: { result: RunResult; runId: string
         title="Melhor combinação (ENSEMBLE_AUTO)"
         actions={
           <div className="row">
+            {assistant && (
+              <button onClick={() => assistant.ask(isBeginner ? "Explique este resultado em linguagem simples." : "Quais arestas merecem mais cautela neste resultado e por quê?")}>
+                Pedir explicação ao assistente
+              </button>
+            )}
             <button onClick={exportEdges}>Exportar arestas (CSV)</button>
             <button onClick={exportJson}>Exportar tudo (JSON)</button>
           </div>
